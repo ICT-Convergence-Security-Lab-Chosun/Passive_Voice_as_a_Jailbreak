@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+.venv/
+venv/
+Dataset/venv/
+
+.cache/
+Analyze/.cache/
+Dataset/.cache/
+
+.env
+.env.*
+!.env.example
+
+*.log
+*.tmp
+*.bak
+
+# Generated datasets and resumable work files
+Dataset/jbb_5conditions.json
+Dataset/jbb_5conditions_wip.jsonl
+Dataset/behaviors.csv
+
+# Analysis outputs and model artifacts
+outputs*/
+*_outputs/
+*_results/
+gemma4_steering_results/
+gemma4_31b_steering_results/
+debug_gemma4_31b/
+*.pt
+*.pth
+*.safetensors
+*.npz
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/

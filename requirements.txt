@@ -1,0 +1,14 @@
+accelerate
+datasets
+matplotlib
+nltk
+numpy
+openai
+pandas
+scikit-learn
+scipy
+stanza
+torch
+tqdm
+transformers
+umap-learn

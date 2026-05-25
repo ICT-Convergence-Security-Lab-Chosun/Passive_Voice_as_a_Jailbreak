@@ -111,100 +111,13 @@ Some scripts download Hugging Face datasets and Stanza/NLTK models on first run.
 
 ## Usage
 
-### 1. Build the prompt dataset
-
-Requires an OpenRouter API key. Uses GPT-3.5 Turbo as the reformulation model, matching the paper's setup.
-
-```bash
-export OPENROUTER_API_KEY="your_key_here"
-python Dataset/Single_prompt.py   # produces jbb_5conditions.json
-python Dataset/update.py          # produces jbb_6conditions.json
-```
-
-`Single_prompt.py` supports resumption — if interrupted, rerunning picks up from the checkpoint (`.jsonl` scratch file). `jbb_6conditions.json` is already included, so this step is only needed to regenerate or extend the dataset.
-
----
-
-### 2. Passive-voice rate analysis
-
-Replicates Figure 2: passive-voice rates across academic (S2ORC, Wikipedia) vs. non-academic (DailyDialog, Reddit) corpora.
-
-```bash
-# Quick sanity-check run (1k sentences per corpus)
-python Analyze/date_passive_rate.py --sample_n 1000 --resume
-
-# Full paper setting (100k sentences per corpus)
-python Analyze/date_passive_rate.py --sample_n 100000 --resume
-
-# Also run harm benchmark analysis (Table 3)
-python Analyze/date_passive_rate.py --sample_n 100000 --resume --harm_bench
-
-# Analyze specific benchmarks only
-python Analyze/date_passive_rate.py --resume --harm_bench \
-  --harm_benchmarks JBB-Behaviors,SORRY-Bench-base
-```
-
-Results are saved under `output/results/` and figures under `output/figures/`. The pipeline supports incremental execution with `--step N` to start from a specific step (1=sampling, 3=parsing, 4=detection, 5=visualization, 6=harm benchmarks).
-
-**Note on DailyDialog:** The script expects the roskoN/dailydialog corpus at:
-`Analyze/.cache/roskoN_dailydialog/train/dialogues_train.txt`
-Download from [Hugging Face](https://huggingface.co/datasets/roskoN/dailydialog) and place accordingly.
-
----
-
-### 3. Steering-vector cosine analysis
-
-Replicates Figure 7: layer-wise cosine similarity to harmfulness and refusal direction vectors. Requires a GPU with enough VRAM for the target model.
-
-```bash
-# Qwen2.5-72B
-python Analyze/active_passive_cosine_auto.py \
-  --active_passive_json Dataset/jbb_6conditions.json \
-  --benign_dataset_name tatsu-lab/alpaca \
-  --max_benign_samples 170 \
-  --model_name Qwen/Qwen2.5-72B-Instruct \
-  --output_dir qwen_steering_results
-
-# Gemma 4 (uses AutoModelForImageTextToText)
-python Analyze/active_passive_cosine_auto.py \
-  --active_passive_json Dataset/jbb_6conditions.json \
-  --benign_dataset_name tatsu-lab/alpaca \
-  --max_benign_samples 170 \
-  --model_name google/gemma-4-31B-it \
-  --output_dir gemma4_steering_results
-```
-
-Add `--save_hidden_cache` to cache hidden states on disk so reruns skip the expensive forward passes. Use `--sorry_base_only` to restrict SORRY-Bench calibration to the 440 base behaviors.
-
----
-
-### 4. Representation visualization (PCA / UMAP / t-SNE)
-
-Replicates Figure 8: PCA scatter of hidden states at `t_post_inst`.
-
-```bash
-# PCA only (faster)
-python Analyze/figure_repr.py \
-  --data_path Dataset/jbb_6conditions.json \
-  --model_name Qwen/Qwen2.5-72B-Instruct \
-  --methods pca \
-  --skip_pca_grid
-
-# Full suite (PCA + UMAP + t-SNE)
-python Analyze/figure_repr.py \
-  --data_path Dataset/jbb_6conditions.json \
-  --model_name Qwen/Qwen2.5-72B-Instruct \
-  --methods pca,umap,tsne \
-  --save_raw_reps
-```
-
----
-
-### 5. Single-query ASR experiment
+### 1. Single-query ASR experiment
 
 Replicates Table 1: single-query ASR across 6 conditions for all models, judged by WildGuard.
 
 ```bash
+export OPENROUTER_API_KEY="your_key_here"
+
 # Run all models and conditions
 python Single_Query/asr.py
 
@@ -231,11 +144,13 @@ python Single_Query/Figure/llamaguard3_category.py
 
 ---
 
-### 6. Multi-query ASR experiment (20 attempts)
+### 2. Multi-query ASR experiment (20 attempts)
 
 Replicates Figure 5: up to 20 passive reformulations per behavior, stopping at the first unsafe response.
 
 ```bash
+export OPENROUTER_API_KEY="your_key_here"
+
 # WildGuard judge
 python Multi_Query/run_wildguard.py --model qwen --parallel 32
 
@@ -251,6 +166,95 @@ Results are written to `Multi_Query/results/`. To plot the combined LG3/LG4 comp
 
 ```bash
 python Multi_Query/Figure/asr_iter20.py
+```
+
+---
+
+### 3. Build the prompt dataset
+
+`jbb_6conditions.json` is already included — this step is only needed to regenerate or extend the dataset. Requires an OpenRouter API key; uses GPT-3.5 Turbo as the reformulation model.
+
+```bash
+export OPENROUTER_API_KEY="your_key_here"
+python Dataset/Single_prompt.py   # produces jbb_5conditions.json
+python Dataset/update.py          # produces jbb_6conditions.json
+```
+
+`Single_prompt.py` supports resumption — if interrupted, rerunning picks up from the checkpoint (`.jsonl` scratch file).
+
+---
+
+### 4. Passive-voice rate analysis
+
+Replicates Figure 2: passive-voice rates across academic (S2ORC, Wikipedia) vs. non-academic (DailyDialog, Reddit) corpora.
+
+```bash
+# Quick sanity-check run (1k sentences per corpus)
+python Analyze/date_passive_rate.py --sample_n 1000 --resume
+
+# Full paper setting (100k sentences per corpus)
+python Analyze/date_passive_rate.py --sample_n 100000 --resume
+
+# Also run harm benchmark analysis (Table 3)
+python Analyze/date_passive_rate.py --sample_n 100000 --resume --harm_bench
+
+# Analyze specific benchmarks only
+python Analyze/date_passive_rate.py --resume --harm_bench \
+  --harm_benchmarks JBB-Behaviors,SORRY-Bench-base
+```
+
+Results are saved under `output/results/` and figures under `output/figures/`. The pipeline supports incremental execution with `--step N` to start from a specific step (1=sampling, 3=parsing, 4=detection, 5=visualization, 6=harm benchmarks).
+
+**Note on DailyDialog:** The script expects the roskoN/dailydialog corpus at:
+`Analyze/.cache/roskoN_dailydialog/train/dialogues_train.txt`
+Download from [Hugging Face](https://huggingface.co/datasets/roskoN/dailydialog) and place accordingly.
+
+---
+
+### 5. Steering-vector cosine analysis
+
+Replicates Figure 7: layer-wise cosine similarity to harmfulness and refusal direction vectors. Requires a GPU with enough VRAM for the target model.
+
+```bash
+# Qwen2.5-72B
+python Analyze/active_passive_cosine_auto.py \
+  --active_passive_json Dataset/jbb_6conditions.json \
+  --benign_dataset_name tatsu-lab/alpaca \
+  --max_benign_samples 170 \
+  --model_name Qwen/Qwen2.5-72B-Instruct \
+  --output_dir qwen_steering_results
+
+# Gemma 4 (uses AutoModelForImageTextToText)
+python Analyze/active_passive_cosine_auto.py \
+  --active_passive_json Dataset/jbb_6conditions.json \
+  --benign_dataset_name tatsu-lab/alpaca \
+  --max_benign_samples 170 \
+  --model_name google/gemma-4-31B-it \
+  --output_dir gemma4_steering_results
+```
+
+Add `--save_hidden_cache` to cache hidden states on disk so reruns skip the expensive forward passes. Use `--sorry_base_only` to restrict SORRY-Bench calibration to the 440 base behaviors.
+
+---
+
+### 6. Representation visualization (PCA / UMAP / t-SNE)
+
+Replicates Figure 8: PCA scatter of hidden states at `t_post_inst`.
+
+```bash
+# PCA only (faster)
+python Analyze/figure_repr.py \
+  --data_path Dataset/jbb_6conditions.json \
+  --model_name Qwen/Qwen2.5-72B-Instruct \
+  --methods pca \
+  --skip_pca_grid
+
+# Full suite (PCA + UMAP + t-SNE)
+python Analyze/figure_repr.py \
+  --data_path Dataset/jbb_6conditions.json \
+  --model_name Qwen/Qwen2.5-72B-Instruct \
+  --methods pca,umap,tsne \
+  --save_raw_reps
 ```
 
 ---

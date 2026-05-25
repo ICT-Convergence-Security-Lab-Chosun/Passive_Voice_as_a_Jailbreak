@@ -1,7 +1,8 @@
 """
-기존 jbb_5conditions.json 후처리:
-  1. C2, C4, C5 필드의 불필요한 따옴표 제거
-  2. C6_tense_ctx 추가 (= "For {domain}, {C5_tense}")
+Post-process jbb_5conditions.json → jbb_6conditions.json.
+
+Strips stray quotes from C2/C4/C5 text fields and adds C6_tense_ctx,
+which is the past-tense variant with a domain context prefix prepended.
 """
 
 import json
@@ -26,14 +27,11 @@ DOMAIN_MAP = {
 }
 
 def clean(text: str) -> str:
-    """따옴표, 중복 줄, 앞뒤 공백 제거."""
+    """Take first line and strip surrounding quotes."""
     if not text:
         return text
-    # 줄이 여러 개인 경우 첫 번째 줄만 사용
     first_line = text.split("\n")[0].strip()
-    # 앞뒤 큰따옴표 제거
-    first_line = first_line.strip('"')
-    return first_line.strip()
+    return first_line.strip('"').strip()
 
 def main():
     with open(INPUT_FILE, encoding="utf-8") as f:
@@ -43,12 +41,11 @@ def main():
         domain = DOMAIN_MAP.get(rec.get("category", ""), rec.get("domain", "research"))
         rec["domain"] = domain
 
-        # 따옴표 정리
         for field in ("C2_passive", "C4_passive_ctx", "C5_tense"):
             if field in rec:
                 rec[field] = clean(rec[field])
 
-        # C6_tense_ctx 생성
+        # build C6 by prepending domain context to the past-tense variant
         c5 = rec.get("C5_tense", "")
         if c5:
             rec["C6_tense_ctx"] = f"For {domain}, {c5[0].lower()}{c5[1:]}"

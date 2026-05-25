@@ -173,7 +173,6 @@ def _spinner_load(fn, label):
 # Config
 
 def build_config(args) -> dict:
-    # Changed: parse --harm_benchmarks filter
     if args.harm_benchmarks:
         selected = [b.strip() for b in args.harm_benchmarks.split(",") if b.strip()]
         invalid = [b for b in selected if b not in HARM_BENCHMARKS_CFG]
@@ -181,7 +180,7 @@ def build_config(args) -> dict:
             raise ValueError(f"Unknown benchmark name(s): {invalid}. Choose from: {list(HARM_BENCHMARKS_CFG.keys())}")
         harm_benchmarks_filter = selected
     else:
-        harm_benchmarks_filter = None  # None = 전체 실행
+        harm_benchmarks_filter = None  # None means run all
 
     return {
         "corpora": ["arxiv", "wikipedia", "dailydialog", "reddit"],
@@ -206,7 +205,7 @@ def build_config(args) -> dict:
         "results_dir": Path("output/results"),
         "figures_dir": Path("output/figures"),
         "resume": args.resume,
-        "harm_benchmarks_filter": harm_benchmarks_filter,  # Changed
+        "harm_benchmarks_filter": harm_benchmarks_filter,
     }
 
 
@@ -986,11 +985,11 @@ def analyze_harm_benchmarks(config: dict, nlp) -> list[dict]:
 
     all_results: list[dict] = []
 
-    bench_filter = config.get("harm_benchmarks_filter")  # Changed
+    bench_filter = config.get("harm_benchmarks_filter")
     bench_items = {
         name: cfg for name, cfg in HARM_BENCHMARKS_CFG.items()
         if bench_filter is None or name in bench_filter
-    }.items()  # Changed
+    }.items()
 
     for name, cfg in bench_items:
         texts = load_harm_benchmark_texts(name, cfg)
@@ -1046,7 +1045,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Passive voice analysis pipeline")
     parser.add_argument("--step", type=int, default=1, choices=range(1, 7), help="Start step. 1/2=sampling, 3=parsing, 4=detection, 5=analysis, 6=harm-bench")
     parser.add_argument("--harm_bench", action="store_true", help="Run STEP 6 after the main pipeline: JBB-Behaviors / SORRY-Bench / HarmBench / AdvBench passive-rate analysis")
-    parser.add_argument("--harm_benchmarks", type=str, default=None, help="쉼표로 구분된 실행할 벤치마크 이름. 예: SORRY-Bench-base 또는 JBB-Behaviors,SORRY-Bench-base. 생략하면 전체 실행. 가능한 값: " + ", ".join(HARM_BENCHMARKS_CFG.keys()))  # Changed
+    parser.add_argument("--harm_benchmarks", type=str, default=None, help="Comma-separated benchmark names to run. Omit to run all. Choices: " + ", ".join(HARM_BENCHMARKS_CFG.keys()))
     parser.add_argument("--sample_n", type=int, default=100000, help="Target valid sentences per corpus")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--min_tokens", type=int, default=5, help="Minimum whitespace-token count per sentence")

@@ -2,74 +2,25 @@
 # -*- coding: utf-8 -*-
 
 """
-Qwen2.5 / Gemma 4 SORRY-Bench steering-vector cosine pipeline for active/passive variants.
+Steering-vector cosine analysis pipeline for active/passive prompt variants.
 
-This is a single-file pipeline for the user's dataset shape:
+Loads jbb_6conditions.json alongside SORRY-Bench harmful and Alpaca benign calibration
+prompts, extracts all-layer hidden states from a target model, builds harmfulness and
+refusal direction vectors (mean-difference at t_inst / t_post_inst), then computes
+per-layer cosine similarity for each C1-C4 variant. Outputs CSVs, layer plots, and a
+plain-text interpretation summary.
 
-[
-  {
-    "id": 0,
-    "category": "...",
-    "domain": "...",
-    "C1_active": "...",
-    "C2_passive": "...",
-    "C3_active_ctx": "...",
-    "C4_passive_ctx": "..."
-  },
-  ...
-]
+Supports Qwen2.5-72B-Instruct and Gemma 4 (via AutoModelForImageTextToText).
+SORRY-Bench 202503 may require `huggingface-cli login` for HF gated access.
 
-Pipeline:
-  1. Download/load SORRY-Bench 202503 from Hugging Face.
-  2. Filter selected refusal-required category ids.
-  3. Load benign prompts from CSV or Hugging Face Alpaca.
-  4. Build calibration rows:
-       benign
-       harmful_refused from filtered SORRY-Bench
-  5. Build evaluation rows:
-       C1_active
-       C2_passive
-       C3_active_ctx
-       C4_passive_ctx
-  6. Extract all-layer hidden states at:
-       t_inst      = final token inside user instruction text
-       t_post_inst = final token of full chat-template prompt before generation
-  7. Build steering vectors:
-       harmfulness_t_inst = mean(SORRY harmful at t_inst) - mean(benign at t_inst)
-       refusal_t_post     = mean(SORRY harmful/refused at t_post) - mean(benign at t_post)
-  8. Compute cosine similarity for each evaluation variant C1/C2/C3/C4.
-  9. Save layer-level, band-level, variant-level, condition-level, and paired-gap outputs.
-
-Install:
-  pip install torch transformers accelerate datasets pandas numpy tqdm matplotlib
-
-Example debug run:
-  python gemma4_sorry_active_passive_cosine_pipeline.py \
-    --active_passive_json active_passive.json \
-    --benign_csv benign_prompts.csv \
-    --output_dir debug_gemma4_31b \
-    --model_name google/gemma-4-31B-it \
-    --max_length 1024 \
-    --dtype bfloat16 \
-    --device_map auto \
-    --max_sorry_per_category 2 \
+Example:
+  python active_passive_cosine_auto.py \\
+    --active_passive_json Dataset/jbb_6conditions.json \\
+    --benign_dataset_name tatsu-lab/alpaca \\
+    --max_benign_samples 170 \\
+    --model_name Qwen/Qwen2.5-72B-Instruct \\
+    --output_dir qwen_steering_results \\
     --save_hidden_cache
-
-Example 72B run:
-  python gemma4_sorry_active_passive_cosine_pipeline.py \
-    --active_passive_json active_passive.json \
-    --benign_csv benign_prompts.csv \
-    --output_dir gemma4_31b_steering_results \
-    --model_name google/gemma-4-31B-it \
-    --max_length 1024 \
-    --dtype bfloat16 \
-    --device_map auto \
-    --save_hidden_cache
-
-Notes:
-  - SORRY-Bench 202503 can require Hugging Face access and `huggingface-cli login`.
-  - Evaluation refused labels are set to -1 by default because cosine evaluation does not require generated outputs.
-  - For final attack-success analysis, separately generate outputs and annotate refused/accepted.
 """
 
 import os
@@ -120,7 +71,7 @@ CANDIDATE_PROMPT_COLS = [
     "instruction",
     "user_query",
     "query",
-    "turns",  # Changed: SORRY-Bench stores prompt text inside this column
+    "turns",  # SORRY-Bench stores the prompt inside this field
 ]
 
 
@@ -131,21 +82,21 @@ class Config:
     benign_csv: Optional[str]
     output_dir: str
 
-    benign_dataset_name: Optional[str]  # Changed: optional Hugging Face benign/Alpaca dataset
-    benign_dataset_split: str  # Changed
-    benign_prompt_col: str  # Changed
-    benign_input_col: Optional[str]  # Changed
-    benign_source_label: str  # Changed
+    benign_dataset_name: Optional[str]
+    benign_dataset_split: str
+    benign_prompt_col: str
+    benign_input_col: Optional[str]
+    benign_source_label: str
 
     hf_cache_dir: str
-    prefer_local_model_cache: bool  # Changed: use cached snapshot before attempting download
+    prefer_local_model_cache: bool
 
     sorry_dataset_name: str
-    sorry_csv: Optional[str]  # Changed
+    sorry_csv: Optional[str]
     sorry_split: Optional[str]
     category_ids: List[int]
     max_sorry_per_category: Optional[int]
-    sorry_base_only: bool  # Changed: filter SORRY-Bench to prompt_style=="base" only
+    sorry_base_only: bool
 
     mode: str
     max_length: int
@@ -164,16 +115,15 @@ class Config:
     load_hidden_cache: bool
     save_built_dataset: bool
 
-    max_benign_samples: Optional[int]  # Changed: cap benign/Alpaca calibration samples
-    benign_sample_seed: int  # Changed: reproducible benign/Alpaca sampling
+    max_benign_samples: Optional[int]
+    benign_sample_seed: int
 
     model_loader: str  # auto | causal_lm | image_text_to_text
     processor_loader: str  # auto | tokenizer | processor
 
 
-# ============================================================
 # Utilities
-# ============================================================
+
 
 def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
@@ -241,30 +191,16 @@ def normalize_category_id_series(s: pd.Series) -> pd.Series:
 
 
 def get_input_device(model):
-    """
-    Safer than model.device when using device_map='auto'.
-    """
+    # model.device is unreliable with device_map='auto'
     return model.get_input_embeddings().weight.device
 
 
-
-
 def hf_repo_id_to_cache_dir_name(repo_id: str) -> str:
-    """
-    Convert a Hugging Face repo id into the hub cache directory name.
-
-    Example:
-      Qwen/Qwen2.5-72B-Instruct
-      -> models--Qwen--Qwen2.5-72B-Instruct
-    """
     return "models--" + repo_id.replace("/", "--")
 
 
 def is_valid_model_snapshot(path: Path) -> bool:
-    """
-    Return True when a HF snapshot directory looks usable by transformers.
-    Symlinks are fine because Hugging Face snapshots commonly point into blobs/.
-    """
+    """Check whether a HF snapshot directory has the files transformers needs."""
     if not path.exists() or not path.is_dir():
         return False
 
@@ -285,11 +221,7 @@ def is_valid_model_snapshot(path: Path) -> bool:
 
 
 def find_latest_cached_snapshot(model_name: str, hf_cache_dir: str) -> Optional[str]:
-    """
-    Find a local Hugging Face snapshot for a repo id.
-
-    If multiple snapshots exist, use the most recently modified valid one.
-    """
+    """Return the most recently modified valid snapshot for a repo, or None."""
     if "/" not in model_name:
         return None
 
@@ -317,14 +249,7 @@ def resolve_model_name_or_path(
     hf_cache_dir: str,
     prefer_local_cache: bool = True,
 ) -> str:
-    """
-    Resolve the model name/path before calling transformers.
-
-    Priority:
-      1. If model_name is already a local path, use it directly.
-      2. If a valid local HF snapshot exists, use that snapshot.
-      3. Otherwise return the HF repo id and let transformers download/use cache_dir.
-    """
+    """Prefer a local cached snapshot before falling back to the HF repo id."""
     model_path = Path(model_name)
 
     if model_path.exists():
@@ -343,15 +268,7 @@ def resolve_model_name_or_path(
 
 
 def extract_prompt_from_sorrybench_turns(turns) -> str:
-    """
-    Extract prompt text from SORRY-Bench prompt-like fields.
-
-    Supports:
-      - plain string prompt
-      - list/tuple/array: ["prompt text"]
-      - dict: {"content": "..."}
-      - stringified list/dict: '["prompt text"]'
-    """
+    """Extract plain prompt text from SORRY-Bench's 'turns' field, which may be a string, list, dict, or stringified version of any of these."""
     import ast
 
     if turns is None:
@@ -407,16 +324,7 @@ def has_any_column(df: pd.DataFrame, candidates: List[str]) -> bool:
 
 
 def load_local_sorry_csv(path: str) -> pd.DataFrame:
-    """
-    Load a local SORRY-style CSV robustly.
-
-    Expected preferred format:
-      category,prompt
-      1,"..."
-
-    Also supports a headerless two-column CSV:
-      1,"..."
-    """
+    """Load a local SORRY-style CSV; falls back to headerless two-column format if headers are missing."""
     print("[INFO] Loading local SORRY CSV:", path)
 
     df = pd.read_csv(path)
@@ -449,9 +357,8 @@ def load_local_sorry_csv(path: str) -> pd.DataFrame:
     return df
 
 
-# ============================================================
 # Dataset build
-# ============================================================
+
 
 def load_sorry_dataset(dataset_name: str, split_name: Optional[str]) -> pd.DataFrame:
     if split_name is not None:
@@ -470,7 +377,7 @@ def build_sorry_harmful_rows(
     category_ids: List[int],
     harmful_label: str,
     max_per_category: Optional[int],
-    base_only: bool = False,  # Changed: if True, filter to prompt_style=="base"
+    base_only: bool = False,
 ) -> pd.DataFrame:
     category_id_col = find_col(sorry_df, CANDIDATE_CATEGORY_ID_COLS, required=True)
     prompt_col = find_col(sorry_df, CANDIDATE_PROMPT_COLS, required=True)
@@ -478,7 +385,6 @@ def build_sorry_harmful_rows(
 
     df = sorry_df.copy()
 
-    # Changed: filter to base prompt style only if requested
     if base_only:
         if "prompt_style" in df.columns:
             before = len(df)
@@ -489,10 +395,7 @@ def build_sorry_harmful_rows(
 
     df["_category_id_int"] = normalize_category_id_series(df[category_id_col])
 
-    if prompt_col == "turns":
-        df["_prompt_text"] = df[prompt_col].apply(extract_prompt_from_sorrybench_turns)
-    else:
-        df["_prompt_text"] = df[prompt_col].apply(extract_prompt_from_sorrybench_turns)
+    df["_prompt_text"] = df[prompt_col].apply(extract_prompt_from_sorrybench_turns)
 
     before_nonempty = len(df)
     df = df[df["_prompt_text"].astype(str).str.strip().ne("")].copy()
@@ -571,14 +474,7 @@ def make_benign_rows_from_dataframe(
     benign_label: str,
     source_label: str = "benign",
 ) -> pd.DataFrame:
-    """
-    Convert a benign prompt DataFrame into the unified calibration schema.
-
-    Required column:
-      - prompt
-    Optional columns:
-      - id, source, category_id, category_name, domain, variant, refused
-    """
+    """Convert a benign prompt DataFrame into the unified calibration schema. Requires a 'prompt' column."""
     if "prompt" not in benign.columns:
         raise ValueError(
             "benign data must contain a 'prompt' column. "
@@ -815,12 +711,11 @@ def build_full_dataset(cfg: Config) -> pd.DataFrame:
         category_ids=cfg.category_ids,
         harmful_label=cfg.harmful_label,
         max_per_category=cfg.max_sorry_per_category,
-        base_only=cfg.sorry_base_only,  # Changed
+        base_only=cfg.sorry_base_only,
     )
 
     benign_df = load_benign_calibration_rows(cfg)
 
-    # Changed: cap benign/Alpaca calibration rows explicitly when requested.
     # If not set, keep the original behavior and balance benign down to the harmful count.
     if cfg.max_benign_samples is not None:
         if len(benign_df) < cfg.max_benign_samples:
@@ -850,31 +745,18 @@ def build_full_dataset(cfg: Config) -> pd.DataFrame:
     return full_df
 
 
-# ============================================================
 # Chat rendering and positions
-# ============================================================
+
 
 def make_text_messages(prompt: str, multimodal_style: bool = False) -> List[Dict]:
-    """
-    Build chat-template messages.
-
-    Gemma 4 IT is registered as an image-text-to-text model on Hugging Face.
-    Its examples use multimodal-style content blocks even for text prompts:
-      {"role": "user", "content": [{"type": "text", "text": prompt}]}
-
-    Most text-only instruct models, such as Qwen, use:
-      {"role": "user", "content": prompt}
-
-    We support both and fall back automatically.
-    """
+    """Build chat messages. Gemma 4 needs multimodal-style content blocks even for text; Qwen uses plain strings."""
     if multimodal_style:
         return [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
     return [{"role": "user", "content": prompt}]
 
 
 def render_chat(tokenizer, prompt: str) -> str:
-    # Try text-only format first for backward compatibility. If the model chat
-    # template expects OpenAI/Gemma-style content blocks, retry with text blocks.
+    # Try plain string first; if the chat template rejects it, retry with content blocks.
     try:
         return tokenizer.apply_chat_template(
             make_text_messages(prompt, multimodal_style=False),
@@ -931,9 +813,8 @@ def find_t_inst_and_t_post_inst(
     return rendered, input_ids, t_inst, t_post_inst
 
 
-# ============================================================
 # Hidden extraction/cache
-# ============================================================
+
 
 @torch.no_grad()
 def extract_hidden_for_prompt(
@@ -1064,9 +945,8 @@ def extract_or_load_records(
     return records
 
 
-# ============================================================
 # Steering vectors and cosine
-# ============================================================
+
 
 def filter_records(
     records: List[Dict],
@@ -1194,9 +1074,8 @@ def compute_eval_scores(
     return pd.DataFrame(rows)
 
 
-# ============================================================
 # Summaries and plots
-# ============================================================
+
 
 def add_layer_bands(df: pd.DataFrame, num_layers: int) -> pd.DataFrame:
     early_end = num_layers // 3
@@ -1557,9 +1436,8 @@ def write_interpretation(
         f.write("\n".join(lines))
 
 
-# ============================================================
 # Main
-# ============================================================
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -1587,7 +1465,7 @@ def parse_args():
         help="Prefer local HF snapshot under --hf_cache_dir before downloading. Use --no-prefer_local_model_cache to disable.",
     )
     parser.add_argument("--sorry_dataset_name", type=str, default=SORRY_DATASET_NAME)
-    parser.add_argument("--sorry_csv", type=str, default=None)  # Changed
+    parser.add_argument("--sorry_csv", type=str, default=None)
     parser.add_argument("--sorry_split", type=str, default=None)
 
     parser.add_argument(
@@ -1602,7 +1480,7 @@ def parse_args():
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Filter SORRY-Bench to prompt_style=='base' only (440 base behaviors). Use --no-sorry_base_only to disable.",
-    )  # Changed
+    )
 
     parser.add_argument("--mode", type=str, default="both", choices=["plain", "context", "both", "tense", "all"])
     parser.add_argument("--max_length", type=int, default=1024)
@@ -1670,14 +1548,14 @@ def main():
         benign_prompt_col=args.benign_prompt_col,
         benign_input_col=args.benign_input_col if args.benign_input_col else None,
         benign_source_label=args.benign_source_label,
-        hf_cache_dir=args.hf_cache_dir,  # Changed
-        prefer_local_model_cache=args.prefer_local_model_cache,  # Changed
+        hf_cache_dir=args.hf_cache_dir,
+        prefer_local_model_cache=args.prefer_local_model_cache,
         sorry_dataset_name=args.sorry_dataset_name,
-        sorry_csv=args.sorry_csv,  # Changed
+        sorry_csv=args.sorry_csv,
         sorry_split=args.sorry_split,
         category_ids=[int(x.strip()) for x in args.category_ids.split(",") if x.strip()],
         max_sorry_per_category=args.max_sorry_per_category,
-        sorry_base_only=args.sorry_base_only,  # Changed
+        sorry_base_only=args.sorry_base_only,
         mode=args.mode,
         max_length=args.max_length,
         dtype=args.dtype,
@@ -1723,7 +1601,7 @@ def main():
         model_name=cfg.model_name,
         hf_cache_dir=cfg.hf_cache_dir,
         prefer_local_cache=cfg.prefer_local_model_cache,
-    )  # Changed
+    )
 
     model_name_lower = cfg.model_name.lower()
 

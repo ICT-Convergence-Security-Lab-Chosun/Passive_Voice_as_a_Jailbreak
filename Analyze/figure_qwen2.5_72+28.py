@@ -204,7 +204,7 @@ def load_benign_prompts(benign_csv: Optional[str], n_benign: int, seed: int) -> 
 
 
 def _extract_sorry_prompt(val) -> str:
-    """active_passive_cosine_auto.py 와 동일한 turns 필드 추출 로직."""
+    """Extract prompt text from the SORRY-Bench 'turns' field (mirrors logic in active_passive_cosine_auto.py)."""
     import ast
     if val is None:
         return ""
@@ -251,7 +251,7 @@ def _load_sorry_from_hf(
     max_sorry: Optional[int],
     seed: int,
 ) -> List[str]:
-    """active_passive_cosine_auto.py 와 동일한 로직으로 HF에서 SORRY-Bench 로드."""
+    """Load SORRY-Bench from HuggingFace and return filtered prompt texts (mirrors active_passive_cosine_auto.py)."""
     log(f"[INFO] Loading Sorry-Bench from HuggingFace: {dataset_name} split={sorry_split}")
     if sorry_split is not None:
         ds = load_dataset(dataset_name, split=sorry_split)
@@ -281,7 +281,7 @@ def _load_sorry_from_hf(
                 category_col = candidate
                 break
         if category_col is None:
-            raise ValueError(f"--sorry_category_ids 가 지정됐으나 카테고리 컬럼을 찾을 수 없습니다. Columns: {list(sb.columns)}")
+            raise ValueError(f"--sorry_category_ids specified but no category column found. Available columns: {list(sb.columns)}")
 
         def _parse_cat(x):
             if pd.isna(x):
@@ -720,11 +720,11 @@ def parse_args():
     parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-72B-Instruct")
     parser.add_argument("--data_path", type=str, default="harmful_prompts.json")
     parser.add_argument("--sorry_bench_path", type=str, default=None,
-                        help="로컬 SORRY-Bench CSV 경로. 생략하면 --sorry_dataset_name HF에서 자동 로드.")
+                        help="Local SORRY-Bench CSV path. If omitted, loads from HuggingFace via --sorry_dataset_name.")
     parser.add_argument("--sorry_dataset_name", type=str, default="sorry-bench/sorry-bench-202503",
-                        help="HuggingFace SORRY-Bench dataset ID (sorry_bench_path 미지정 시 사용).")
+                        help="HuggingFace SORRY-Bench dataset ID (used when sorry_bench_path is not given).")
     parser.add_argument("--sorry_split", type=str, default=None,
-                        help="HF SORRY-Bench split 이름. None이면 첫 번째 split 자동 사용.")
+                        help="HF SORRY-Bench split name. Defaults to the first available split.")
     parser.add_argument("--benign_csv", type=str, default=None)
     parser.add_argument("--output_dir", type=str, default="outputs_qwen25_72b_all_layers")
 
@@ -742,7 +742,7 @@ def parse_args():
     parser.add_argument("--sorry_category_ids", type=str, default=None, help="Comma-separated Sorry-Bench categories to include, e.g. 6,7,8,9,10,12,13,14,15,17,18,19,20,21,23,24,28")
     parser.add_argument("--sorry_per_category", type=int, default=None, help="Randomly sample this many Sorry-Bench prompts per selected category. Use 10 for 17 categories x 10 = 170.")
     parser.add_argument("--max_jbb_per_variant", type=int, default=None, help="Randomly sample at most this many JBB prompts per C1/C2/C3/C4 variant.")
-    parser.add_argument("--skip_conditions", type=str, default=None, help="쉼표로 구분된 스킵할 condition 이름. 예: C5_tense 또는 C5_tense,C6_tense_ctx")
+    parser.add_argument("--skip_conditions", type=str, default=None, help="Comma-separated condition names to exclude, e.g. C5_tense or C5_tense,C6_tense_ctx")
     parser.add_argument("--random_seed", type=int, default=42)
 
     parser.add_argument("--methods", type=str, default="pca", help="Comma-separated: pca,umap,tsne. For all layers, pca is strongly recommended first.")

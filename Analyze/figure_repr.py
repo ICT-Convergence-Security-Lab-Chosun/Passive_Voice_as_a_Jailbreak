@@ -1,41 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Gemma 4 all-layer representation visualization script.
+Hidden-state representation visualization (PCA / UMAP / t-SNE) for any causal LM.
 
-What this does
-- Loads C1_active / C2_passive / C3_active_context / C4_passive_context from a JSON file.
-- Loads benign prompts from Alpaca by default, or from a local CSV if provided.
-- Loads Sorry-Bench harmful reference prompts from a local CSV.
-- Extracts hidden states for every transformer block layer from Gemma 4 instruction models.
-- Saves per-layer 2D coordinates and plots.
+- Loads C1–C4 prompt variants from jbb_6conditions.json.
+- Loads benign prompts from Alpaca (default) or a local CSV.
+- Loads SORRY-Bench harmful reference prompts for calibration.
+- Extracts hidden states at every transformer block layer and produces per-layer 2D plots.
 
-Layer indexing
-- output layer index 0 means transformer block 0 output, i.e. outputs.hidden_states[1].
-- outputs.hidden_states[0] is the embedding output and is excluded unless --include_embedding is passed.
+Layer indexing: index 0 = transformer block 0 output (outputs.hidden_states[1]);
+the embedding layer (outputs.hidden_states[0]) is excluded unless --include_embedding is passed.
 
-Recommended quick run
-python figure_gemma4_debug_tsne_pca50.py \
-  --data_path harmful_prompts.json \
-  --sorry_bench_path sorrybench_202503_harmful_160.csv \
-  --output_dir outputs_gemma4_all_layers \
-  --model_name google/gemma-4-31B-it \
-  --token_pos t_post_inst \
-  --methods pca \
-  --dtype bfloat16 \
-  --device_map auto
+Quick run (PCA only):
+    python Analyze/figure_repr.py \
+      --data_path Dataset/jbb_6conditions.json \
+      --model_name Qwen/Qwen2.5-72B-Instruct \
+      --methods pca --skip_pca_grid
 
-Full, expensive visualization run
-python figure_gemma4_debug_tsne_pca50.py \
-  --data_path harmful_prompts.json \
-  --sorry_bench_path sorrybench_202503_harmful_160.csv \
-  --output_dir outputs_gemma4_all_layers_full \
-  --model_name google/gemma-4-31B-it \
-  --token_pos t_post_inst \
-  --methods pca,umap,tsne \
-  --save_raw_reps \
-  --dtype bfloat16 \
-  --device_map auto
+Full run (PCA + UMAP + t-SNE):
+    python Analyze/figure_repr.py \
+      --data_path Dataset/jbb_6conditions.json \
+      --model_name Qwen/Qwen2.5-72B-Instruct \
+      --methods pca,umap,tsne --save_raw_reps
 """
 
 import argparse
@@ -52,12 +38,7 @@ import pandas as pd
 import torch
 import matplotlib.pyplot as plt
 from datasets import load_dataset
-from transformers import AutoTokenizer, AutoProcessor, AutoModelForCausalLM
-
-try:
-    from transformers import AutoModelForImageTextToText
-except Exception:
-    AutoModelForImageTextToText = None
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
@@ -112,64 +93,6 @@ def get_input_device(model):
     return model.get_input_embeddings().weight.device
 
 
-def get_num_hidden_layers(model) -> int:
-    """
-    Return the number of transformer block outputs for standard CausalLM configs
-    and nested configs such as Gemma 4.
-
-    Qwen-style configs expose model.config.num_hidden_layers directly.
-    Gemma 4 configs may nest the text model config under text_config or language_config.
-    """
-    cfg = model.config
-
-    candidate_attrs = [
-        "num_hidden_layers",
-        "n_layer",
-        "num_layers",
-        "n_layers",
-        "num_hidden_layer",
-    ]
-
-    for attr in candidate_attrs:
-        value = getattr(cfg, attr, None)
-        if value is not None:
-            return int(value)
-
-    for sub_name in ["text_config", "language_config", "decoder_config", "llm_config"]:
-        sub_cfg = getattr(cfg, sub_name, None)
-        if sub_cfg is None:
-            continue
-        for attr in candidate_attrs:
-            value = getattr(sub_cfg, attr, None)
-            if value is not None:
-                return int(value)
-
-    # Some wrapped architectures expose the underlying language model separately.
-    for module_name in ["language_model", "text_model", "model"]:
-        module = getattr(model, module_name, None)
-        if module is None:
-            continue
-        sub_cfg = getattr(module, "config", None)
-        if sub_cfg is not None:
-            for attr in candidate_attrs:
-                value = getattr(sub_cfg, attr, None)
-                if value is not None:
-                    return int(value)
-        layers = getattr(module, "layers", None)
-        if layers is not None:
-            return int(len(layers))
-
-    # Last-resort common module path.
-    nested = getattr(getattr(model, "model", None), "layers", None)
-    if nested is not None:
-        return int(len(nested))
-
-    raise AttributeError(
-        "Could not infer number of hidden layers from this model/config. "
-        f"Config class={type(cfg).__name__}; available config keys={list(getattr(cfg, 'to_dict', lambda: {})().keys())[:80]}"
-    )
-
-
 def safe_text(x) -> str:
     if x is None:
         return ""
@@ -196,9 +119,6 @@ def parse_int_list(text: Optional[str]) -> Optional[List[int]]:
 
 
 def sample_texts(texts: List[str], n: Optional[int], seed: int, label: str) -> List[str]:
-    """
-    Randomly sample up to n non-empty prompts. If n is None, keep all prompts.
-    """
     texts = [
         safe_text(x).strip()
         for x in texts
@@ -244,7 +164,6 @@ def load_json_prompts(
             log(f"[INFO] Skipping condition: {key}")
             del prompts[key]
 
-    # Random sampling, not head(), so plots are less dependent on file ordering.
     if max_jbb_per_variant is not None:
         for key in list(prompts):
             prompts[key] = sample_texts(prompts[key], max_jbb_per_variant, seed, key)
@@ -329,7 +248,6 @@ def _load_sorry_from_hf(
         log(f"[INFO] Using Sorry-Bench split: {first_split}")
         sb = dsdict[first_split].to_pandas()
 
-    # find the column that holds prompt text (SORRY-Bench 202503 uses "turns")
     prompt_col = None
     for candidate in ["turns", "prompt", "question", "instruction"]:
         if candidate in sb.columns:
@@ -342,7 +260,6 @@ def _load_sorry_from_hf(
     sb["prompt"] = sb[prompt_col].apply(_extract_sorry_prompt).str.strip()
     sb = sb[sb["prompt"].ne("") & sb["prompt"].ne("[None]")].copy()
 
-    # category filter (mirrors normalize_category_id_series in active_passive_cosine_auto.py)
     if category_ids is not None:
         category_col = None
         for candidate in ["category_id", "category_idx", "category_num", "taxonomy_id", "category"]:
@@ -350,16 +267,15 @@ def _load_sorry_from_hf(
                 category_col = candidate
                 break
         if category_col is None:
-            raise ValueError(f"--sorry_category_ids specified but no category column found. Columns: {list(sb.columns)}")
+            raise ValueError(f"--sorry_category_ids specified but no category column found. Available columns: {list(sb.columns)}")
 
         def _parse_cat(x):
             if pd.isna(x):
                 return None
             if isinstance(x, (int, float)):
                 return int(x)
-            text = str(x).strip()
             import re
-            m = re.match(r"^\s*(\d+)", text)
+            m = re.match(r"^\s*(\d+)", str(x).strip())
             return int(m.group(1)) if m else None
 
         sb["_category_id_int"] = sb[category_col].apply(_parse_cat)
@@ -398,7 +314,6 @@ def load_sorry_prompts(
     sorry_dataset_name: str = "sorry-bench/sorry-bench-202503",
     sorry_split: Optional[str] = None,
 ) -> List[str]:
-    # load from HuggingFace when no local CSV is provided
     if not sorry_bench_path:
         return _load_sorry_from_hf(
             dataset_name=sorry_dataset_name,
@@ -429,7 +344,6 @@ def load_sorry_prompts(
                 "--sorry_category_ids was provided, but the Sorry-Bench CSV has no category column. "
                 "Expected one of: category_id, category, category_num, taxonomy_id."
             )
-
         sb["_category_id_int"] = pd.to_numeric(sb[category_col], errors="coerce").astype("Int64")
         sb = sb[sb["_category_id_int"].isin(category_ids)].copy()
 
@@ -486,16 +400,7 @@ def load_all_prompts(args) -> Dict[str, List[str]]:
 # -----------------------------------------------------------------------------
 
 def render_chat(tokenizer, prompt: str) -> str:
-    """
-    Render a text-only chat prompt.
-
-    Gemma 4 is often loaded through AutoProcessor. We pass tokenizer=processor.tokenizer
-    into the rest of this script, so this function remains tokenizer-based. The fallback
-    is a simple single-turn user prompt rather than Qwen ChatML, because Gemma does not
-    use Qwen's <|im_start|> template.
-    """
     messages = [{"role": "user", "content": prompt}]
-
     try:
         return tokenizer.apply_chat_template(
             messages,
@@ -503,19 +408,8 @@ def render_chat(tokenizer, prompt: str) -> str:
             add_generation_prompt=True,
         )
     except Exception:
-        pass
-
-    block_messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
-    try:
-        return tokenizer.apply_chat_template(
-            block_messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-    except Exception:
-        pass
-
-    return prompt
+        # Fallback to Qwen ChatML-ish format.
+        return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
 
 def find_token_positions(tokenizer, prompt: str, max_length: int) -> Tuple[torch.Tensor, int, int, str]:
@@ -619,7 +513,7 @@ def extract_representations(model, tokenizer, all_prompts: Dict[str, List[str]],
       reps[layer][condition] = np.array of shape (N, hidden_dim)
       metadata dataframe with rows aligned with each condition's arrays.
     """
-    layer_count = get_num_hidden_layers(model)
+    layer_count = int(model.config.num_hidden_layers)
     n_layers = layer_count + 1 if args.include_embedding else layer_count
     layer_ids = list(range(n_layers))
 
@@ -712,11 +606,9 @@ def plot_layer(reps_at_layer: Dict[str, np.ndarray], layer_idx: int, methods: Li
     panel = 0
 
     if "pca" in methods:
-        log(f"[INFO] layer {layer_idx}: PCA start")
         pca = PCA(n_components=2, random_state=args.random_seed)
         Z = pca.fit_transform(X)
         ev = pca.explained_variance_ratio_
-        log(f"[INFO] layer {layer_idx}: PCA done")
         scatter_2d(axes[panel], Z, labels, f"PCA  EV {ev[0]:.1%} / {ev[1]:.1%}")
         save_coordinates(Path(args.output_dir), layer_idx, "pca", Z, labels)
         panel += 1
@@ -757,7 +649,7 @@ def plot_layer(reps_at_layer: Dict[str, np.ndarray], layer_idx: int, methods: Li
         save_coordinates(Path(args.output_dir), layer_idx, "tsne", Z, labels)
         panel += 1
 
-    fig.suptitle(f"{args.model_name} | layer {layer_idx} | token={args.token_pos} | n={len(labels)}", fontsize=11, fontweight="bold")
+    fig.suptitle(f"Qwen2.5-72B-Instruct | layer {layer_idx} | token={args.token_pos} | n={len(labels)}", fontsize=11, fontweight="bold")
     plt.tight_layout()
 
     out = Path(args.output_dir) / "plots_by_layer" / f"layer{layer_idx:02d}_{args.token_pos}_{'_'.join(methods)}.png"
@@ -804,91 +696,6 @@ def save_raw_reps(all_reps: Dict[int, Dict[str, np.ndarray]], output_dir: str) -
         log(f"[SAVE] {out}")
 
 
-
-# -----------------------------------------------------------------------------
-# Model loading
-# -----------------------------------------------------------------------------
-
-def is_gemma4_model(model_name: str) -> bool:
-    name = str(model_name).lower()
-    return "gemma-4" in name or "gemma4" in name
-
-
-def load_tokenizer_and_model(args):
-    """
-    Load tokenizer/model robustly for Gemma 4 and CausalLM-style models.
-
-    Gemma 4 checkpoints on Hugging Face may be exposed through an AutoProcessor
-    and image-text-to-text model class. For text-only hidden-state extraction,
-    we still pass input_ids and attention_mask to the model, but tokenizer loading
-    is routed through processor.tokenizer when using the Gemma 4 path.
-    """
-    common_kwargs = {"trust_remote_code": args.trust_remote_code}
-    model_kwargs = {
-        "torch_dtype": get_torch_dtype(args.dtype),
-        "device_map": args.device_map,
-        "trust_remote_code": args.trust_remote_code,
-    }
-    if args.hf_cache_dir:
-        common_kwargs["cache_dir"] = args.hf_cache_dir
-        model_kwargs["cache_dir"] = args.hf_cache_dir
-
-    loader = args.model_loader
-    if loader == "auto":
-        loader = "image_text_to_text" if is_gemma4_model(args.model_name) else "causal_lm"
-
-    processor = None
-
-    if loader == "image_text_to_text":
-        if AutoModelForImageTextToText is None:
-            log("[WARN] AutoModelForImageTextToText is not available. Falling back to causal_lm.")
-            loader = "causal_lm"
-        else:
-            try:
-                log("[INFO] processor loading start")
-                processor = AutoProcessor.from_pretrained(args.model_name, **common_kwargs)
-                log("[INFO] processor loaded")
-
-                tokenizer = getattr(processor, "tokenizer", None)
-                if tokenizer is None:
-                    log("[WARN] processor has no .tokenizer; falling back to AutoTokenizer")
-                    tokenizer = AutoTokenizer.from_pretrained(args.model_name, **common_kwargs)
-
-                log("[INFO] model loader: AutoModelForImageTextToText")
-                log("[INFO] model from_pretrained start")
-                t0 = time.time()
-                model = AutoModelForImageTextToText.from_pretrained(args.model_name, **model_kwargs)
-                log(f"[INFO] model from_pretrained finished in {time.time() - t0:.1f}s")
-            except Exception as e:
-                log(f"[WARN] image_text_to_text loader failed: {type(e).__name__}: {e}")
-                log("[WARN] Falling back to AutoTokenizer + AutoModelForCausalLM for text-only hidden-state extraction.")
-                processor = None
-                loader = "causal_lm"
-
-    if loader == "causal_lm":
-        log("[INFO] tokenizer loading start")
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name, **common_kwargs)
-        log("[INFO] tokenizer loaded")
-
-        log("[INFO] model loader: AutoModelForCausalLM")
-        log("[INFO] model from_pretrained start")
-        t0 = time.time()
-        model = AutoModelForCausalLM.from_pretrained(args.model_name, **model_kwargs)
-        log(f"[INFO] model from_pretrained finished in {time.time() - t0:.1f}s")
-
-    elif loader != "image_text_to_text":
-        raise ValueError(f"Unsupported --model_loader: {args.model_loader}")
-
-    if getattr(tokenizer, "pad_token", None) is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    log("[INFO] model.eval start")
-    model.eval()
-    log("[INFO] model.eval finished")
-
-    return tokenizer, model, processor
-
-
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
@@ -896,7 +703,7 @@ def load_tokenizer_and_model(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--model_name", type=str, default="google/gemma-4-31B-it")
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-72B-Instruct")
     parser.add_argument("--data_path", type=str, default="harmful_prompts.json")
     parser.add_argument("--sorry_bench_path", type=str, default=None,
                         help="Local SORRY-Bench CSV path. If omitted, loads from HuggingFace via --sorry_dataset_name.")
@@ -905,19 +712,12 @@ def parse_args():
     parser.add_argument("--sorry_split", type=str, default=None,
                         help="HF SORRY-Bench split name. Defaults to the first available split.")
     parser.add_argument("--benign_csv", type=str, default=None)
-    parser.add_argument("--output_dir", type=str, default="outputs_gemma4_all_layers")
+    parser.add_argument("--output_dir", type=str, default="outputs_qwen25_72b_all_layers")
 
     parser.add_argument("--hf_cache_dir", type=str, default=None)
     parser.add_argument("--dtype", type=str, default="bfloat16", choices=["float16", "bfloat16", "float32"])
     parser.add_argument("--device_map", type=str, default="auto")
     parser.add_argument("--trust_remote_code", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument(
-        "--model_loader",
-        type=str,
-        default="auto",
-        choices=["auto", "causal_lm", "image_text_to_text"],
-        help="Model loader. auto tries the Gemma 4 image-text path first, then falls back to causal_lm for text-only hidden-state extraction.",
-    )
 
     parser.add_argument("--token_pos", type=str, default="t_post_inst", choices=["t_inst", "t_post_inst"])
     parser.add_argument("--max_length", type=int, default=512)
@@ -963,7 +763,30 @@ def main() -> None:
     all_prompts = load_all_prompts(args)
 
     log("\n=== Model load ===")
-    tokenizer, model, processor = load_tokenizer_and_model(args)
+    tokenizer_kwargs = {"trust_remote_code": args.trust_remote_code}
+    model_kwargs = {
+        "torch_dtype": get_torch_dtype(args.dtype),
+        "device_map": args.device_map,
+        "trust_remote_code": args.trust_remote_code,
+    }
+    if args.hf_cache_dir:
+        tokenizer_kwargs["cache_dir"] = args.hf_cache_dir
+        model_kwargs["cache_dir"] = args.hf_cache_dir
+
+    log("[INFO] tokenizer loading start")
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, **tokenizer_kwargs)
+    log("[INFO] tokenizer loaded")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    log("[INFO] model from_pretrained start")
+    t0 = time.time()
+    model = AutoModelForCausalLM.from_pretrained(args.model_name, **model_kwargs)
+    log(f"[INFO] model from_pretrained finished in {time.time() - t0:.1f}s")
+
+    log("[INFO] model.eval start")
+    model.eval()
+    log("[INFO] model.eval finished")
 
     log("\n=== Hidden extraction for all layers ===")
     all_reps, meta_df = extract_representations(model, tokenizer, all_prompts, args)
@@ -973,9 +796,7 @@ def main() -> None:
 
     layer_info = {
         "model_name": args.model_name,
-        "model_loader": args.model_loader,
-        "config_class": type(model.config).__name__,
-        "num_hidden_layers": get_num_hidden_layers(model),
+        "num_hidden_layers": int(model.config.num_hidden_layers),
         "include_embedding": bool(args.include_embedding),
         "layer_indexing": "0-based transformer block output index; outputs.hidden_states[layer+1] when include_embedding=False",
         "token_pos": args.token_pos,

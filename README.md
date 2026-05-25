@@ -4,6 +4,8 @@ Code and dataset for the paper: **"Passive Voice as a Jailbreak: Exploiting Mism
 
 > **Warning:** This repository includes research on LLM safety vulnerabilities. Code examples and the dataset contain harmful content included solely for scientific evaluation.
 
+![Figure 1](Figure/fig1.png)
+
 ---
 
 ## Overview
@@ -19,8 +21,6 @@ We show that a simple grammatical transformation — rewriting an active-voice h
 
 **Models evaluated:** GPT-3.5 Turbo, GPT-4o, Claude Sonnet 4.6, Gemini 2.5 Flash, LLaMA 3.1-70B-Instruct, Qwen 2.5-72B-Instruct
 
-![Figure 1](Figure/fig1.png)
-
 ---
 
 ## Repository Structure
@@ -35,8 +35,7 @@ Passive_Voice_as_a_Jailbreak/
 ├── Analyze/
 │   ├── date_passive_rate.py             # Corpus-level passive-voice rate analysis (Fig. 2)
 │   ├── active_passive_cosine_auto.py    # Steering-vector cosine analysis (Fig. 7)
-│   ├── figure_qwen2.5_72+28.py          # PCA/UMAP/t-SNE for Qwen2.5-72B (Fig. 8)
-│   └── figure_gemma4_31+28.py           # PCA/UMAP/t-SNE for Gemma 4
+│   └── figure_repr.py                   # PCA/UMAP/t-SNE representation visualization (Fig. 8)
 │
 ├── requirements.txt
 └── .env.example
@@ -162,15 +161,17 @@ Add `--save_hidden_cache` to cache hidden states on disk so reruns skip the expe
 Replicates Figure 8: PCA scatter of hidden states at `t_post_inst`.
 
 ```bash
-# Qwen2.5-72B — PCA only (faster)
-python Analyze/figure_qwen2.5_72+28.py \
+# PCA only (faster)
+python Analyze/figure_repr.py \
   --data_path Dataset/jbb_6conditions.json \
+  --model_name Qwen/Qwen2.5-72B-Instruct \
   --methods pca \
   --skip_pca_grid
 
-# Gemma 4 — full suite
-python Analyze/figure_gemma4_31+28.py \
+# Full suite (PCA + UMAP + t-SNE)
+python Analyze/figure_repr.py \
   --data_path Dataset/jbb_6conditions.json \
+  --model_name Qwen/Qwen2.5-72B-Instruct \
   --methods pca,umap,tsne \
   --save_raw_reps
 ```

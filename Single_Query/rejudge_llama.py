@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-기존 WildGuard 실험 결과(final_asr/st_*.jsonl)의 response를
-LlamaGuard-3 / LlamaGuard-4로 재판정.
+Re-judge WildGuard single-query results with LlamaGuard-3 or LlamaGuard-4.
 
-OpenRouter API 호출 없음 — response 재사용.
-출력: results_dir/rejudge_{prefix}_{model_key}.jsonl (모델별 분리)
+Reads existing response JSONL from the WildGuard run (no new API calls),
+re-scores with the selected local judge, and writes per-model output JSONL.
 
-실행:
-  python run_rejudge_lg.py --judge lg3
-  python run_rejudge_lg.py --judge lg4
-  python run_rejudge_lg.py --judge lg3 --model qwen gemini
+Usage:
+  python Single_Query/rejudge_llama.py --judge lg3
+  python Single_Query/rejudge_llama.py --judge lg4
+  python Single_Query/rejudge_llama.py --judge lg3 --model qwen gemini
 """
 
 import json, argparse, threading
@@ -20,14 +19,14 @@ JUDGE_CONFIGS = {
     "lg3": {
         "model_id":    "meta-llama/Llama-Guard-3-8B",
         "short":       "LlamaGuard-3-8B",
-        "results_dir": Path("final_asr_lg3"),
+        "results_dir": Path(__file__).parent / "results_lg3",
         "prefix":      "lg3",
         "judge_type":  "lg3",
     },
     "lg4": {
         "model_id":    "meta-llama/Llama-Guard-4-12B",
         "short":       "LlamaGuard-4-12B",
-        "results_dir": Path("final_asr_lg4"),
+        "results_dir": Path(__file__).parent / "results_lg4",
         "prefix":      "lg4",
         "judge_type":  "lg4",
     },
@@ -52,23 +51,22 @@ CATEGORIES = [
 ]
 
 CONDITIONS = [
-    "C1_active", "C2_passive", "C3_active_ctx",
-    "C4_passive_ctx", "C5_tense", "C6_tense_ctx",
+    "C1_active", "C2_passive", "C3_active_context",
+    "C4_passive_context", "C5_tense", "C6_tense_context",
 ]
 
 COND_SHORT = {
-    "C1_active":     "C1-Active",
-    "C2_passive":    "C2-Passive",
-    "C3_active_ctx": "C3-Act+Ctx",
-    "C4_passive_ctx":"C4-Pas+Ctx",
-    "C5_tense":      "C5-Tense",
-    "C6_tense_ctx":  "C6-Ten+Ctx",
+    "C1_active":          "C1-Active",
+    "C2_passive":         "C2-Passive",
+    "C3_active_context":  "C3-Act+Ctx",
+    "C4_passive_context": "C4-Pas+Ctx",
+    "C5_tense":           "C5-Tense",
+    "C6_tense_context":   "C6-Ten+Ctx",
 }
 
 ERROR_RESPONSES = {"ERROR", "ERROR_400", "", None}
 
 
-# ── Judge 로드 ─────────────────────────────────────────────────────
 def load_judge(model_id: str, judge_type: str):
     import torch
 
@@ -90,7 +88,6 @@ def load_judge(model_id: str, judge_type: str):
     return tokenizer, model
 
 
-# ── Judge 추론 ─────────────────────────────────────────────────────
 def run_judge(processor_or_tok, model, prompt: str, response: str,
               judge_lock: threading.Lock, judge_type: str) -> tuple:
     import torch
@@ -139,7 +136,6 @@ def run_judge(processor_or_tok, model, prompt: str, response: str,
     return ("unsafe" if is_unsafe else "safe"), ([cats] if cats else [])
 
 
-# ── Worker ─────────────────────────────────────────────────────────
 def process_record(
     rec, tokenizer, model,
     judge_lock, file_locks, print_lock,
@@ -169,7 +165,6 @@ def process_record(
                "wg_judge":     rec.get("judge"),
                "wg_compliant": rec.get("compliant")}
 
-    # 모델별 파일에 저장
     mk       = rec["model"]
     out_path = results_dir / f"rejudge_{prefix}_{mk}.jsonl"
     with file_locks[mk]:
@@ -177,26 +172,25 @@ def process_record(
             f.write(json.dumps(new_rec, ensure_ascii=False) + "\n")
 
 
-# ── 소스 레코드 로드 ───────────────────────────────────────────────
 def load_source(src_dir: Path, model_keys: list) -> list:
     records = []
     for mk in model_keys:
         p = src_dir / f"st_{mk}.jsonl"
         if not p.exists():
-            print(f"[Skip] {p} 없음")
+            print(f"[Skip] {p} not found")
             continue
         before = len(records)
         with open(p) as f:
             for line in f:
                 line = line.strip()
                 if not line: continue
-                records.append(json.loads(line))   # 조건 없이 전부 로드
-        print(f"[Load] {p.name}: {len(records) - before}개")
+                records.append(json.loads(line))
+        print(f"[Load] {p.name}: {len(records) - before} records")
     return records
 
 
 def load_done(results_dir: Path, prefix: str, model_keys: list) -> set:
-    """모델별 파일에서 완료된 (model, id, condition) 집합 반환."""
+    """Return the set of completed (model, id, condition) tuples from per-model files."""
     done = set()
     for mk in model_keys:
         p = results_dir / f"rejudge_{prefix}_{mk}.jsonl"
@@ -212,21 +206,20 @@ def load_done(results_dir: Path, prefix: str, model_keys: list) -> set:
     return done
 
 
-# ── 메인 ──────────────────────────────────────────────────────────
 def run_rejudge(tokenizer, judge_model, records, results_dir,
                 prefix, workers, judge_type, model_keys):
 
     done = load_done(results_dir, prefix, model_keys)
     if done:
-        print(f"[이어받기] {len(done)}개 완료")
+        print(f"[Resume] {len(done)} done")
 
     pending = [r for r in records
                if (r["model"], r["id"], r["condition"]) not in done]
     total   = len(pending)
-    print(f"[총 task] {total}개  (workers={workers})\n")
+    print(f"[Tasks] {total}  (workers={workers})\n")
 
     if total == 0:
-        print("[완료] 모든 레코드가 이미 판정되었습니다.")
+        print("[Done] All records already judged.")
         return
 
     judge_lock = threading.Lock()
@@ -249,12 +242,11 @@ def run_rejudge(tokenizer, judge_model, records, results_dir,
                 future.result()
             except Exception as e:
                 with print_lock:
-                    print(f"\n  [Worker 오류] {e}", flush=True)
+                    print(f"\n  [Worker error] {e}", flush=True)
 
-    print(f"\n[완료] → {results_dir}/")
+    print(f"\n[Done] → {results_dir}/")
 
 
-# ── ASR 집계 ──────────────────────────────────────────────────────
 def asr_pct(records, condition=None, category=None):
     f = records
     if condition: f = [r for r in f if r["condition"] == condition]
@@ -270,7 +262,7 @@ def print_results(results_dir: Path, prefix: str,
     for mk in model_keys:
         p = results_dir / f"rejudge_{prefix}_{mk}.jsonl"
         if not p.exists():
-            print(f"[Skip] {p.name} 없음")
+            print(f"[Skip] {p.name} not found")
             continue
         records = [json.loads(l) for l in open(p) if l.strip()]
         all_records.extend(records)
@@ -291,7 +283,6 @@ def print_results(results_dir: Path, prefix: str,
             print(f"  {COND_SHORT.get(cond,cond):<20} {a:>6.1f}%  "
                   f"{sign}{diff:>6.1f}%  (n={n})")
 
-        # 모델별 CSV
         csv_path = results_dir / f"rejudge_{prefix}_{mk}.csv"
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -299,11 +290,10 @@ def print_results(results_dir: Path, prefix: str,
             for cat in CATEGORIES:
                 writer.writerow([cat] + [
                     round(asr_pct(records, c, cat), 1) for c in present])
-            writer.writerow(["전체"] + [
+            writer.writerow(["all"] + [
                 round(asr_pct(records, condition=c), 1) for c in present])
         print(f"  CSV → {csv_path}")
 
-    # 전체 통합 CSV
     if all_records:
         csv_all = results_dir / f"rejudge_{prefix}_all.csv"
         present = [c for c in CONDITIONS
@@ -316,18 +306,17 @@ def print_results(results_dir: Path, prefix: str,
                 for cat in CATEGORIES:
                     writer.writerow([mk, cat] + [
                         round(asr_pct(recs, c, cat), 1) for c in present])
-            writer.writerow(["전체", "전체"] + [
+            writer.writerow(["all", "all"] + [
                 round(asr_pct(all_records, condition=c), 1) for c in present])
-        print(f"\n  통합 CSV → {csv_all}")
+        print(f"\n  Combined CSV → {csv_all}")
 
 
-# ── Entry point ────────────────────────────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--judge", required=True, choices=["lg3", "lg4"])
     parser.add_argument("--model", nargs="+", default=list(MODELS.keys()),
                         choices=list(MODELS.keys()))
-    parser.add_argument("--src_dir", default="final_asr")
+    parser.add_argument("--src_dir", default=str(Path(__file__).parent / "results"))
     parser.add_argument("--openrouter-workers", "--parallel",
                         dest="openrouter_workers", type=int, default=8)
     args = parser.parse_args()
@@ -343,14 +332,14 @@ if __name__ == "__main__":
     model_keys = [MODELS[k] for k in args.model]
 
     print(f"Judge:    {judge_short}  ({cfg['model_id']})")
-    print(f"소스:     {src_dir}/")
-    print(f"모델:     {model_keys}")
+    print(f"Source:   {src_dir}/")
+    print(f"Models:   {model_keys}")
     print(f"Workers:  {args.openrouter_workers}\n")
 
     records = load_source(src_dir, model_keys)
     if not records:
-        print("[오류] 소스 레코드가 없습니다."); exit(1)
-    print(f"[총 소스] {len(records)}개\n")
+        print("[Error] No source records found."); exit(1)
+    print(f"[Source] {len(records)} records\n")
 
     tokenizer, judge_model = load_judge(cfg["model_id"], judge_type)
 
@@ -359,4 +348,4 @@ if __name__ == "__main__":
                 judge_type, model_keys)
 
     print_results(results_dir, prefix, judge_short, model_keys)
-    print("\n완료!")
+    print("\nDone.")

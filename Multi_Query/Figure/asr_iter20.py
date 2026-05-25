@@ -1,3 +1,10 @@
+"""
+Multi-query (20 attempts) ASR bar chart — LlamaGuard-3 vs LlamaGuard-4.
+
+Generates two layout variants:
+  iter20_combined_top_legend.png/pdf   — panel label below each subplot
+  iter20_combined_side_label.png/pdf   — panel label as rotated side text
+"""
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -48,7 +55,6 @@ BAR_STEP = 1.85
 PANEL_LABEL_SIZE = BASE + 5
 ASR_LABEL_SIZE   = BASE + 4
 
-# subplot 레이아웃 파라미터 (두 버전 공통)
 L, R, T, B, WS = 0.08, 0.995, 0.95, 0.28, 0.04
 
 
@@ -72,18 +78,16 @@ def _draw_panel(ax, values, show_yticks=True):
     ax.spines['right'].set_visible(False)
 
 
-# ── 패널 중심 x 좌표 계산 (figure 좌표계) ───────────────────
+# panel center x coordinates (figure coordinate system)
 # wspace = gap / ax_width  →  ax_w = (R-L) / (2 + WS)
 ax_w   = (R - L) / (2 + WS)
 gap_w  = ax_w * WS
-ax0_cx = L + ax_w / 2                      # 왼쪽 패널 중심 x
-ax1_cx = L + ax_w + gap_w + ax_w / 2       # 오른쪽 패널 중심 x
-ax_cy  = (T + B) / 2                        # 패널 수직 중심
+ax0_cx = L + ax_w / 2                      # left panel center x
+ax1_cx = L + ax_w + gap_w + ax_w / 2       # right panel center x
+ax_cy  = (T + B) / 2                        # panel vertical center
 
 
-# ══════════════════════════════════════════════════
-# Version A : 패널 라벨 아래 중앙
-# ══════════════════════════════════════════════════
+# Version A: panel label below each subplot
 fig_a, axes_a = plt.subplots(1, 2, figsize=(FIG_W, FIG_H), sharey=True)
 fig_a.subplots_adjust(left=L, right=R, top=T, bottom=B, wspace=WS)
 
@@ -102,15 +106,12 @@ for ext in ('png', 'pdf'):
 plt.close(fig_a)
 
 
-# ══════════════════════════════════════════════════
-# Version B : 패널 라벨 좌측 세로 (예시 이미지 스타일)
-# ══════════════════════════════════════════════════
-# 왼쪽 패널 라벨 공간 확보를 위해 L을 넓게 잡음
+# Version B: panel label as rotated side text
 L2, R2, WS2 = 0.14, 0.995, 0.08
 ax_w2  = (R2 - L2) / (2 + WS2)
 gap_w2 = ax_w2 * WS2
-ax0_x0 = L2                                 # 왼쪽 패널 left edge
-ax1_x0 = L2 + ax_w2 + gap_w2               # 오른쪽 패널 left edge
+ax0_x0 = L2                                 # left panel left edge
+ax1_x0 = L2 + ax_w2 + gap_w2               # right panel left edge
 ax_cy2 = (T + B) / 2
 
 fig_b, axes_b = plt.subplots(1, 2, figsize=(FIG_W, FIG_H), sharey=True)
@@ -119,17 +120,14 @@ fig_b.subplots_adjust(left=L2, right=R2, top=T, bottom=B, wspace=WS2)
 for i, (ax, (panel_label, vals)) in enumerate(zip(axes_b, PANEL_DATA)):
     _draw_panel(ax, vals, show_yticks=(i == 0))
 
-# (a) 패널 라벨: 왼쪽 패널 left edge 바로 왼쪽
 fig_b.text(ax0_x0 - 0.025, ax_cy2, '(a) LLaMA Guard 3-8B',
            ha='center', va='center', rotation=90,
            fontsize=PANEL_LABEL_SIZE, fontweight='bold')
 
-# ASR (%) : (a) 라벨 바로 왼쪽
 fig_b.text(ax0_x0 - 0.063, ax_cy2, 'ASR (%)',
            ha='center', va='center', rotation=90,
            fontsize=ASR_LABEL_SIZE)
 
-# (b) 패널 라벨: 오른쪽 패널 left edge 바로 왼쪽
 fig_b.text(ax1_x0 - 0.025, ax_cy2, '(b) LLaMA Guard 4-12B',
            ha='center', va='center', rotation=90,
            fontsize=PANEL_LABEL_SIZE, fontweight='bold')

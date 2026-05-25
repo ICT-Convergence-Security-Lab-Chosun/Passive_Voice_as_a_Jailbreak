@@ -32,10 +32,32 @@ Passive_Voice_as_a_Jailbreak/
 │   ├── update.py               # Post-process into jbb_6conditions.json
 │   └── jbb_6conditions.json    # Included 6-condition dataset (100 JBB behaviors)
 │
+├── Single_Query/
+│   ├── asr.py                  # Single-query experiment (C1–C6, WildGuard judge)
+│   ├── rejudge_llama.py        # Re-judge WildGuard results with LlamaGuard-3/4
+│   └── Figure/
+│       ├── wildguard_single.py      # ASR bar chart — WildGuard
+│       ├── wildguard_category.py    # Category breakdown — WildGuard
+│       ├── llamaguard3_single.py    # ASR bar chart — LlamaGuard-3
+│       ├── llamaguard3_category.py  # Category breakdown — LlamaGuard-3
+│       ├── llamaguard4_single.py    # ASR bar chart — LlamaGuard-4
+│       └── llamaguard4_category.py  # Category breakdown — LlamaGuard-4
+│
+├── Multi_Query/
+│   ├── run_wildguard.py        # 20-attempt experiment — WildGuard judge
+│   ├── run_llamaguard3.py      # 20-attempt experiment — LlamaGuard-3 judge
+│   ├── run_llamaguard4.py      # 20-attempt experiment — LlamaGuard-4 judge
+│   └── Figure/
+│       └── asr_iter20.py       # Multi-query ASR bar chart (LG3 vs LG4)
+│
 ├── Analyze/
 │   ├── date_passive_rate.py             # Corpus-level passive-voice rate analysis (Fig. 2)
 │   ├── active_passive_cosine_auto.py    # Steering-vector cosine analysis (Fig. 7)
-│   └── figure_repr.py                   # PCA/UMAP/t-SNE representation visualization (Fig. 8)
+│   ├── figure_repr.py                   # PCA/UMAP/t-SNE representation visualization (Fig. 8)
+│   └── sbert_similarity.py              # S-BERT cosine similarity between C1 and C2
+│
+├── Figure/
+│   └── fig1.png
 │
 ├── requirements.txt
 └── .env.example
@@ -178,6 +200,61 @@ python Analyze/figure_repr.py \
 
 ---
 
+### 5. Single-query ASR experiment
+
+Replicates Table 1: single-query ASR across 6 conditions for all models, judged by WildGuard.
+
+```bash
+# Run all models and conditions
+python Single_Query/asr.py
+
+# Specific models only
+python Single_Query/asr.py --model qwen gemini gpt4o
+
+# Retry any failed (ERROR) responses
+python Single_Query/asr.py --retry-errors
+```
+
+To re-score the WildGuard results with LlamaGuard-3 or LlamaGuard-4:
+
+```bash
+python Single_Query/rejudge_llama.py --judge lg3
+python Single_Query/rejudge_llama.py --judge lg4
+```
+
+Results are written to `Single_Query/results/`. Figure scripts in `Single_Query/Figure/` read hardcoded result values and can be run directly:
+
+```bash
+python Single_Query/Figure/wildguard_single.py
+python Single_Query/Figure/llamaguard3_category.py
+```
+
+---
+
+### 6. Multi-query ASR experiment (20 attempts)
+
+Replicates Figure 5: up to 20 passive reformulations per behavior, stopping at the first unsafe response.
+
+```bash
+# WildGuard judge
+python Multi_Query/run_wildguard.py --model qwen --parallel 32
+
+# LlamaGuard-3 judge
+python Multi_Query/run_llamaguard3.py --model llama3 --parallel 32
+
+# LlamaGuard-4 judge
+python Multi_Query/run_llamaguard4.py                # all models
+python Multi_Query/run_llamaguard4.py --skip gpt35 llama3
+```
+
+Results are written to `Multi_Query/results/`. To plot the combined LG3/LG4 comparison:
+
+```bash
+python Multi_Query/Figure/asr_iter20.py
+```
+
+---
+
 ## Transformation Rules
 
 Each active-voice request is rewritten to an agentless passive construction. By-phrases are always excluded.
@@ -192,23 +269,6 @@ Each active-voice request is rewritten to an agentless passive construction. By-
 | Generate X | Explain how X is generated |
 | Give / Provide X | Explain how X is typically carried out |
 | Complex sentence | Explain how [core action] is/was [past participle] |
-
----
-
-## Results Summary
-
-Single-query ASR (WildGuard judge, T=0):
-
-| Model | Active | Past-tense | **Passive** |
-|-------|--------|-----------|------------|
-| GPT-3.5 Turbo | ~5% | ~15% | **~60%** |
-| GPT-4o | ~3% | ~7% | **~10%** |
-| Claude Sonnet 4.6 | ~2% | ~4% | **~5%** |
-| Gemini 2.5 Flash | ~5% | ~10% | **~35%** |
-| LLaMA 3.1-70B | ~5% | ~10% | **~60%** |
-| Qwen 2.5-72B | ~5% | ~15% | **~30%** |
-
-Under multi-query evaluation (20 passive variants per behavior, T=1): ASR ranges from **45–90%** across all models.
 
 ---
 

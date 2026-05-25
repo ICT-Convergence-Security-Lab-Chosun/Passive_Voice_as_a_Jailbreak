@@ -1,3 +1,4 @@
+"""Single-query ASR by harm category (C2_passive) — WildGuard judge."""
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -26,9 +27,8 @@ def _get_font_path():
 fm.fontManager.addfont(_get_font_path())
 plt.rcParams['font.family']      = 'Times New Roman'
 plt.rcParams['mathtext.fontset'] = 'stix'
-plt.rcParams['pdf.fonttype']     = 42
-plt.rcParams['ps.fonttype']      = 42
 
+# Model order: GPT-3.5 Turbo, GPT-4o, Claude Sonnet 4.6, Gemini 2.5 Flash, LLaMA 3.1-70B, Qwen 2.5-72B
 MODELS = ['GPT-3.5 Turbo', 'GPT-4o', 'Claude Sonnet 4.6',
           'Gemini 2.5 Flash', 'LLaMA 3.1-70B', 'Qwen 2.5-72B']
 
@@ -54,16 +54,16 @@ PASSIVE_COLORS = {
     'Qwen 2.5-72B':       '#4DB6AC',
 }
 
-# ── 데이터 (LlamaGuard3, C2_passive, judge_asr %)
-# 카테고리 순서: Harassment, Malware, Physical, Economic, Fraud,
-#               Disinformation, Sexual, Privacy, Expert, Government decision-making
+# ASR data (WildGuard judge, C2_passive)
+# category order: Harassment, Malware, Physical, Economic, Fraud,
+#                 Disinformation, Sexual, Privacy, Expert, Government
 DATA = {
-    'GPT-3.5 Turbo':     [20.0, 30.0, 60.0, 40.0, 40.0, 20.0, 70.0, 40.0, 10.0, 40.0],
-    'GPT-4o':            [20.0, 30.0,  0.0, 10.0, 10.0,  0.0,  0.0, 10.0, 10.0,  0.0],
-    'Claude Sonnet 4.6': [ 0.0,  0.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0, 10.0],
-    'Gemini 2.5 Flash':  [10.0, 20.0,  0.0,  0.0, 10.0, 20.0, 20.0, 10.0,  0.0,  0.0],
-    'LLaMA 3.1-70B':     [40.0, 40.0, 70.0, 30.0, 40.0, 20.0, 60.0, 40.0,  0.0, 20.0],
-    'Qwen 2.5-72B':      [60.0, 30.0, 40.0, 20.0, 20.0, 30.0, 10.0, 40.0, 30.0,  0.0],
+    'GPT-3.5 Turbo':     [60.0, 60.0, 90.0, 70.0, 60.0, 70.0, 50.0, 80.0, 10.0, 50.0],
+    'GPT-4o':            [10.0, 20.0, 10.0, 10.0, 10.0, 40.0,  0.0,  0.0,  0.0, 10.0],
+    'Claude Sonnet 4.6': [ 0.0, 10.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0, 10.0,  0.0],
+    'Gemini 2.5 Flash':  [ 0.0, 30.0,  0.0,  0.0, 20.0, 60.0,  0.0, 40.0,  0.0, 10.0],
+    'LLaMA 3.1-70B':     [30.0, 80.0, 80.0, 30.0, 60.0, 30.0, 60.0, 50.0,  0.0, 30.0],
+    'Qwen 2.5-72B':      [50.0, 30.0, 30.0, 10.0, 30.0, 60.0, 10.0, 50.0, 10.0,  0.0],
 }
 
 BASE  = 22
@@ -123,7 +123,7 @@ ax.legend(
 plt.tight_layout(rect=[0, 0, 1, 0.87])
 
 for ext in ('png', 'pdf'):
-    out = os.path.join(_SCRIPT_DIR, f'LlamaGuard3_category.{ext}')
+    out = os.path.join(_SCRIPT_DIR, f'wildguard_category.{ext}')
     fig.savefig(out, dpi=300, bbox_inches='tight')
     print(f'Saved: {out}')
 

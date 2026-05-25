@@ -1,3 +1,4 @@
+"""Single-query ASR by harm category (C2_passive) — LlamaGuard-4 judge."""
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -55,9 +56,9 @@ PASSIVE_COLORS = {
     'Qwen 2.5-72B':       '#4DB6AC',
 }
 
-# ── 데이터 (LlamaGuard4, C2_passive, judge_asr %)
-# 카테고리 순서: Harassment, Malware, Physical, Economic, Fraud,
-#               Disinformation, Sexual, Privacy, Expert, Government decision-making
+# ASR data (LlamaGuard-4 judge, C2_passive)
+# category order: Harassment, Malware, Physical, Economic, Fraud,
+#                 Disinformation, Sexual, Privacy, Expert, Government decision-making
 DATA = {
     'GPT-3.5 Turbo':     [10.0, 30.0, 70.0, 60.0, 40.0, 10.0, 50.0, 40.0,  0.0, 20.0],
     'GPT-4o':            [10.0, 10.0,  0.0, 10.0, 30.0,  0.0,  0.0,  0.0,  0.0,  0.0],

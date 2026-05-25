@@ -1,3 +1,4 @@
+"""Single-query ASR by harm category (C2_passive) — LlamaGuard-3 judge."""
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -26,8 +27,9 @@ def _get_font_path():
 fm.fontManager.addfont(_get_font_path())
 plt.rcParams['font.family']      = 'Times New Roman'
 plt.rcParams['mathtext.fontset'] = 'stix'
+plt.rcParams['pdf.fonttype']     = 42
+plt.rcParams['ps.fonttype']      = 42
 
-# Model order: GPT-3.5 Turbo, GPT-4o, Claude Sonnet 4.6, Gemini 2.5 Flash, LLaMA 3.1-70B, Qwen 2.5-72B
 MODELS = ['GPT-3.5 Turbo', 'GPT-4o', 'Claude Sonnet 4.6',
           'Gemini 2.5 Flash', 'LLaMA 3.1-70B', 'Qwen 2.5-72B']
 
@@ -45,29 +47,29 @@ CATEGORIES = [
 ]
 
 PASSIVE_COLORS = {
-    'GPT-3.5 Turbo':      '#E87461',  # Changed
-    'GPT-4o':             '#4472C4',  # Changed
-    'Claude Sonnet 4.6':  '#70AD47',  # Changed
-    'Gemini 2.5 Flash':   '#9E77B5',  # Changed
-    'LLaMA 3.1-70B':      '#F5C542',  # Changed
-    'Qwen 2.5-72B':       '#4DB6AC',  # Changed
+    'GPT-3.5 Turbo':      '#E87461',
+    'GPT-4o':             '#4472C4',
+    'Claude Sonnet 4.6':  '#70AD47',
+    'Gemini 2.5 Flash':   '#9E77B5',
+    'LLaMA 3.1-70B':      '#F5C542',
+    'Qwen 2.5-72B':       '#4DB6AC',
 }
 
-# ── 데이터 (LlamaGuard3, C2_passive, judge_asr %)
-# 카테고리 순서: Harassment, Malware, Physical, Economic, Fraud,
-#               Disinformation, Sexual, Privacy, Expert, Government
+# ASR data (LlamaGuard-3 judge, C2_passive)
+# category order: Harassment, Malware, Physical, Economic, Fraud,
+#                 Disinformation, Sexual, Privacy, Expert, Government decision-making
 DATA = {
-    'GPT-3.5 Turbo':     [60.0, 60.0, 90.0, 70.0, 60.0, 70.0, 50.0, 80.0, 10.0, 50.0],
-    'GPT-4o':            [10.0, 20.0, 10.0, 10.0, 10.0, 40.0,  0.0,  0.0,  0.0, 10.0],
-    'Claude Sonnet 4.6': [ 0.0, 10.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0, 10.0,  0.0],
-    'Gemini 2.5 Flash':  [ 0.0, 30.0,  0.0,  0.0, 20.0, 60.0,  0.0, 40.0,  0.0, 10.0],
-    'LLaMA 3.1-70B':     [30.0, 80.0, 80.0, 30.0, 60.0, 30.0, 60.0, 50.0,  0.0, 30.0],
-    'Qwen 2.5-72B':      [50.0, 30.0, 30.0, 10.0, 30.0, 60.0, 10.0, 50.0, 10.0,  0.0],
+    'GPT-3.5 Turbo':     [20.0, 30.0, 60.0, 40.0, 40.0, 20.0, 70.0, 40.0, 10.0, 40.0],
+    'GPT-4o':            [20.0, 30.0,  0.0, 10.0, 10.0,  0.0,  0.0, 10.0, 10.0,  0.0],
+    'Claude Sonnet 4.6': [ 0.0,  0.0,  0.0, 10.0,  0.0,  0.0,  0.0,  0.0,  0.0, 10.0],
+    'Gemini 2.5 Flash':  [10.0, 20.0,  0.0,  0.0, 10.0, 20.0, 20.0, 10.0,  0.0,  0.0],
+    'LLaMA 3.1-70B':     [40.0, 40.0, 70.0, 30.0, 40.0, 20.0, 60.0, 40.0,  0.0, 20.0],
+    'Qwen 2.5-72B':      [60.0, 30.0, 40.0, 20.0, 20.0, 30.0, 10.0, 40.0, 30.0,  0.0],
 }
 
-BASE  = 22       # Changed
-FIG_W = 18.2     # Changed
-FIG_H = 7.25     # Changed
+BASE  = 22
+FIG_W = 18.2
+FIG_H = 7.25
 
 n_models = len(MODELS)
 n_cats   = len(CATEGORIES)
@@ -84,21 +86,21 @@ for i, model in enumerate(MODELS):
         width=bar_w,
         color=PASSIVE_COLORS[model],
         edgecolor='black',
-        linewidth=0.4,  # Changed
+        linewidth=0.4,
         label=model,
     )
 
 for i in range(1, n_cats):
-    ax.axvline(i - 0.5, color='#888888', linewidth=0.55, linestyle='--', zorder=0) 
+    ax.axvline(i - 0.5, color='#888888', linewidth=0.55, linestyle='--', zorder=0)
 
 ax.set_xticks(x_centers)
-ax.set_xticklabels(CATEGORIES, fontsize=BASE - 1, rotation=0, ha='center')  
+ax.set_xticklabels(CATEGORIES, fontsize=BASE - 1, rotation=0, ha='center')
 ax.set_xlim(-0.5, n_cats - 0.5)
 
-ax.set_ylabel('ASR (%)', fontsize=BASE + 2)  
+ax.set_ylabel('ASR (%)', fontsize=BASE + 2)
 ax.set_ylim(0, 105)
 ax.set_yticks([0, 20, 40, 60, 80, 100])
-ax.yaxis.set_tick_params(labelsize=BASE)  
+ax.yaxis.set_tick_params(labelsize=BASE)
 
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
@@ -106,23 +108,23 @@ ax.grid(False)
 
 ax.legend(
     loc='upper center',
-    bbox_to_anchor=(0.5, 1.17), 
+    bbox_to_anchor=(0.5, 1.17),
     ncol=6,
-    fontsize=BASE - 5,         
+    fontsize=BASE - 5,
     frameon=True,
     edgecolor='#cccccc',
     facecolor='white',
     framealpha=1.0,
     fancybox=False,
-    handlelength=1.25,           
+    handlelength=1.25,
     handletextpad=0.4,
-    columnspacing=0.85,          
+    columnspacing=0.85,
 )
 
-plt.tight_layout(rect=[0, 0, 1, 0.87])  
+plt.tight_layout(rect=[0, 0, 1, 0.87])
 
 for ext in ('png', 'pdf'):
-    out = os.path.join(_SCRIPT_DIR, f'category_graph.{ext}')
+    out = os.path.join(_SCRIPT_DIR, f'LlamaGuard3_category.{ext}')
     fig.savefig(out, dpi=300, bbox_inches='tight')
     print(f'Saved: {out}')
 

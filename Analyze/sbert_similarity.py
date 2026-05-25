@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-C1_active vs C2_passive  S-BERT Cosine Similarity 분석
-=======================================================
+S-BERT cosine similarity between C1_active and C2_passive prompt pairs.
 
-사용법
-------
-  python sbert_similarity.py
-  python sbert_similarity.py --data /path/to/jbb_6conditions.json
-  python sbert_similarity.py --out results/sbert/
+Encodes all 100 JBB behaviors with all-mpnet-base-v2 and computes pairwise
+cosine similarity, reporting per-category statistics and saving CSV/JSON outputs.
+
+Usage:
+  python Analyze/sbert_similarity.py
+  python Analyze/sbert_similarity.py --data Dataset/jbb_6conditions.json --out sbert_out/
 """
 
 import csv
@@ -18,9 +18,6 @@ from collections import defaultdict
 from pathlib import Path
 from sentence_transformers import SentenceTransformer, util
 
-# ── 모델 설정 ─────────────────────────────────────────────────
-#
-#
 MODEL_NAME = "all-mpnet-base-v2"
 
 CATEGORIES = [
@@ -38,17 +35,14 @@ def main(data_path: str, out_dir: str):
     actives  = [r["C1_active"]  for r in data]
     passives = [r["C2_passive"] for r in data]
 
-    # ── S-BERT 인코딩 (근거: [1]) ─────────────────────────────────────────
     print(f"[S-BERT] Loading: {MODEL_NAME}")
     model = SentenceTransformer(MODEL_NAME)
 
     emb_a = model.encode(actives,  convert_to_tensor=True, show_progress_bar=True)
     emb_p = model.encode(passives, convert_to_tensor=True, show_progress_bar=True)
 
-    # 쌍별 cosine similarity (근거: [1][3])
     sims = util.cos_sim(emb_a, emb_p).diagonal().cpu().numpy()
 
-    # ── 결과 집계 ─────────────────────────────────────────────────────────
     results = [
         {"id": r["id"], "category": r["category"],
          "C1_active": r["C1_active"], "C2_passive": r["C2_passive"],
@@ -57,7 +51,6 @@ def main(data_path: str, out_dir: str):
     ]
     results_sorted = sorted(results, key=lambda x: x["cosine_sim"])
 
-    # ── 출력 ─────────────────────────────────────────────────────────────
     print(f"\n{'═'*70}")
     print(f"  S-BERT Cosine Similarity  |  C1_active vs C2_passive  |  n={len(results)}")
     print(f"  Model: {MODEL_NAME}")
@@ -68,7 +61,7 @@ def main(data_path: str, out_dir: str):
     print(f"  Min     : {np.min(sims):.4f}  (id={results_sorted[0]['id']})")
     print(f"  Max     : {np.max(sims):.4f}  (id={results_sorted[-1]['id']})")
 
-    print(f"\n  분포 (SemEval STS 스케일 기준 [3]):")
+    print(f"\n  Distribution (SemEval STS scale):")
     for lo, hi in [(0.4,0.5),(0.5,0.6),(0.6,0.7),(0.7,0.8),(0.8,0.9),(0.9,1.01)]:
         cnt = sum(1 for s in sims if lo <= s < hi)
         hi_str = "1.0" if hi > 1 else f"{hi:.1f}"
@@ -89,11 +82,10 @@ def main(data_path: str, out_dir: str):
         [(cat, np.mean(v), np.std(v)) for cat, v in cat_sims.items()],
         key=lambda x: x[1]
     )
-    print(f"\n  Category별 평균:")
+    print(f"\n  Mean by category:")
     for cat, mean, std in cat_stats:
         print(f"  {cat[:38]:<38}  mean={mean:.4f}  std={std:.4f}")
 
-    # ── 저장 ─────────────────────────────────────────────────────────────
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -122,10 +114,10 @@ def main(data_path: str, out_dir: str):
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
-    print(f"\n  저장 완료:")
+    print(f"\n  Saved:")
     print(f"    {csv_path}")
     print(f"    {summary_path}")
-    print("\n완료!")
+    print("\nDone.")
 
 
 if __name__ == "__main__":

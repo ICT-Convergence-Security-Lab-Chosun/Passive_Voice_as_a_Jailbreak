@@ -1,3 +1,4 @@
+"""Single-query ASR bar chart (no context vs with context) — LlamaGuard-4 judge."""
 import os, urllib.request
 import numpy as np
 import matplotlib
@@ -39,18 +40,18 @@ MODELS = [
 ]
 COLORS = {'Active': '#CD534C', 'Past': '#EFC000', 'Passive': '#2B5EA7'}
 
-# ── 데이터 (LlamaGuard3 rejudge 결과) ─────────────────────────
-# 모델 순서: GPT-3.5 Turbo, GPT-4o, Claude Sonnet 4.6, Gemini 2.5 Flash, LLaMA3.1 70B, Qwen 2.5 72B
+# ASR data (LlamaGuard-4 judge)
+# model order: GPT-3.5 Turbo, GPT-4o, Claude Sonnet 4.6, Gemini 2.5 Flash, LLaMA3.1 70B, Qwen 2.5 72B
 
 # (a) No context
-ACTIVE_NC  = [26.0,  4.0,  3.0,  2.0,  6.0,  3.0]   # C1_active
-PAST_NC    = [ 8.0,  2.0,  0.0,  5.0, 10.0,  8.0]   # C5_tense
-PASSIVE_NC = [37.0,  9.0,  2.0,  9.0, 36.0, 28.0]   # C2_passive
+ACTIVE_NC  = [22.0,  4.0,  1.0,  1.0,  2.0,  3.0]   # C1_active
+PAST_NC    = [ 1.0,  1.0,  0.0,  0.0,  3.0,  1.0]   # C5_tense
+PASSIVE_NC = [33.0,  6.0,  6.0,  4.0, 32.0, 23.0]   # C2_passive
 
 # (b) With context
-ACTIVE_CT  = [26.0, 10.0,  6.0,  4.0, 14.0,  9.0]   # C3_active_ctx
-PAST_CT    = [ 6.0,  3.0,  0.0,  5.0, 11.0,  9.0]   # C6_tense_ctx
-PASSIVE_CT = [36.0, 10.0,  0.0,  5.0, 35.0, 32.0]   # C4_passive_ctx
+ACTIVE_CT  = [15.0,  3.0,  3.0,  2.0,  8.0,  7.0]   # C3_active_ctx
+PAST_CT    = [ 2.0,  1.0,  0.0,  1.0,  3.0,  2.0]   # C6_tense_ctx
+PASSIVE_CT = [34.0, 10.0,  2.0,  6.0, 28.0, 30.0]   # C4_passive_ctx
 
 BASE       = 17
 FIG_W      = 15.5
@@ -124,7 +125,7 @@ def main():
     fig.subplots_adjust(left=0.072, right=0.995, top=0.82, bottom=0.31, wspace=0.06)
 
     for ext in ('png', 'pdf'):
-        out = os.path.join(_SCRIPT_DIR, f'LlamaGuard3_SQ.{ext}')
+        out = os.path.join(_SCRIPT_DIR, f'LlamaGuard4_SQ.{ext}')
         fig.savefig(out, dpi=300, bbox_inches='tight')
         print(f'Saved: {out}')
     plt.close(fig)

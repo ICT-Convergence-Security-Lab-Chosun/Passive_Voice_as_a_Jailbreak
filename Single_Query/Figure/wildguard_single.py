@@ -1,3 +1,4 @@
+"""Single-query ASR bar chart (no context vs with context) — WildGuard judge."""
 import os, urllib.request
 import numpy as np
 import matplotlib
@@ -29,7 +30,6 @@ plt.rcParams['mathtext.fontset'] = 'stix'
 plt.rcParams['pdf.fonttype']     = 42
 plt.rcParams['ps.fonttype']      = 42
 
-# ── 모델 / 색상 ───────────────────────────────
 MODELS = [
     'GPT-3.5\nTurbo',
     'GPT-4o',
@@ -40,7 +40,6 @@ MODELS = [
 ]
 COLORS = {'Active': '#CD534C', 'Past': '#EFC000', 'Passive': '#2B5EA7'}
 
-# ── 데이터 ────────────────────────────────────
 # (a) No context
 ACTIVE_NC  = [26.0,  2.0,  2.0,  2.0,  1.0,  1.0]
 PAST_NC    = [27.0,  6.0,  2.0, 11.0, 22.0,  8.0]
@@ -51,7 +50,6 @@ ACTIVE_CT  = [27.0,  4.0,  1.0,  2.0, 12.0,  6.0]
 PAST_CT    = [26.0,  8.0,  2.0, 13.0, 23.0, 12.0]
 PASSIVE_CT = [57.0, 12.0,  2.0, 12.0, 38.0, 36.0]
 
-# ── 스타일 ────────────────────────────────────
 BASE       = 17
 FIG_W      = 15.5
 FIG_H      = 4.75
@@ -94,7 +92,6 @@ def main():
     axes[0].set_ylabel('ASR (%)', fontsize=BASE + 3, labelpad=8)
     axes[1].tick_params(axis='y', labelleft=False)
 
-    # 범례
     legend_handles = [
         Patch(facecolor=color, edgecolor='black', linewidth=0.45, label=label)
         for label, color in CONDITIONS
@@ -116,7 +113,6 @@ def main():
         borderpad=0.35,
     )
 
-    # 패널 라벨
     for ax, label in zip(axes, ['(a) No context', '(b) With context']):
         ax.text(0.5, -0.29, label,
                 transform=ax.transAxes,

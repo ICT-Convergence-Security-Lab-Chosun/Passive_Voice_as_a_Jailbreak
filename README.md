@@ -270,13 +270,5 @@ Each active-voice request is rewritten to an agentless passive construction. By-
 | Give / Provide X | Explain how X is typically carried out |
 | Complex sentence | Explain how [core action] is/was [past participle] |
 
----
 
-## Secret Scan
-
-Before pushing, check for accidentally committed credentials:
-
-```bash
-rg -n "api[_-]?key|secret|token|password|bearer|sk-|hf_|ghp_|github_pat" .
-```
 

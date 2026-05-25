@@ -644,7 +644,7 @@ def build_active_passive_eval_rows(
             pair_id = f"{base_id}_ctx"
 
             rows.append({
-                "id": f"eval_{base_id}_C3_active_ctx",
+                "id": f"eval_{base_id}_C3_active_context",
                 "split": "evaluation",
                 "source": "active_passive_dataset",
                 "category_id": base_id,
@@ -652,14 +652,14 @@ def build_active_passive_eval_rows(
                 "domain": domain,
                 "pair_id": pair_id,
                 "contextualized": 1,
-                "variant": "C3_active_ctx",
+                "variant": "C3_active_context",
                 "condition": active_label,
-                "prompt": safe_str(item["C3_active_ctx"]),
+                "prompt": safe_str(item["C3_active_context"]),
                 "refused": -1,
             })
 
             rows.append({
-                "id": f"eval_{base_id}_C4_passive_ctx",
+                "id": f"eval_{base_id}_C4_passive_context",
                 "split": "evaluation",
                 "source": "active_passive_dataset",
                 "category_id": base_id,
@@ -667,9 +667,9 @@ def build_active_passive_eval_rows(
                 "domain": domain,
                 "pair_id": pair_id,
                 "contextualized": 1,
-                "variant": "C4_passive_ctx",
+                "variant": "C4_passive_context",
                 "condition": passive_label,
-                "prompt": safe_str(item["C4_passive_ctx"]),
+                "prompt": safe_str(item["C4_passive_context"]),
                 "refused": -1,
             })
 
@@ -1172,12 +1172,12 @@ def make_pair_gap_tables(by_sample_band: pd.DataFrame, cfg: Config) -> Dict[str,
     Builds:
       1. active_vs_passive_pair_gap:
           C1 vs C2 for *_plain
-          C3 vs C4 for *_ctx
+          C3 vs C4 for *_context
       2. context_effect_gap:
           C1 vs C3 for active
           C2 vs C4 for passive
     """
-    needed_variants = {"C1_active", "C2_passive", "C3_active_ctx", "C4_passive_ctx"}
+    needed_variants = {"C1_active", "C2_passive", "C3_active_context", "C4_passive_context"}
     present_variants = set(by_sample_band["variant"].unique()) if "variant" in by_sample_band.columns else set()
     if not needed_variants.issubset(present_variants):
         print("[INFO] Skipping pair gap tables: C1-C4 variants not present (tense-only mode).")
@@ -1247,7 +1247,7 @@ def make_pair_gap_tables(by_sample_band: pd.DataFrame, cfg: Config) -> Dict[str,
         gm = middle[middle["base_behavior_id"] == base_id]
         gl = late[late["base_behavior_id"] == base_id]
 
-        needed = ["C1_active", "C2_passive", "C3_active_ctx", "C4_passive_ctx"]
+        needed = ["C1_active", "C2_passive", "C3_active_context", "C4_passive_context"]
         if not all(v in set(gm["variant"]) for v in needed):
             continue
         if not all(v in set(gl["variant"]) for v in needed):
@@ -1259,17 +1259,17 @@ def make_pair_gap_tables(by_sample_band: pd.DataFrame, cfg: Config) -> Dict[str,
         rows_ctx.append({
             "base_behavior_id": base_id,
             "harmfulness_middle_cos_C1": val(gm, "C1_active", "harmfulness_cosine_t_inst"),
-            "harmfulness_middle_cos_C3": val(gm, "C3_active_ctx", "harmfulness_cosine_t_inst"),
-            "harmfulness_middle_cos_context_gap_active_C3_minus_C1": val(gm, "C3_active_ctx", "harmfulness_cosine_t_inst") - val(gm, "C1_active", "harmfulness_cosine_t_inst"),
+            "harmfulness_middle_cos_C3": val(gm, "C3_active_context", "harmfulness_cosine_t_inst"),
+            "harmfulness_middle_cos_context_gap_active_C3_minus_C1": val(gm, "C3_active_context", "harmfulness_cosine_t_inst") - val(gm, "C1_active", "harmfulness_cosine_t_inst"),
             "harmfulness_middle_cos_C2": val(gm, "C2_passive", "harmfulness_cosine_t_inst"),
-            "harmfulness_middle_cos_C4": val(gm, "C4_passive_ctx", "harmfulness_cosine_t_inst"),
-            "harmfulness_middle_cos_context_gap_passive_C4_minus_C2": val(gm, "C4_passive_ctx", "harmfulness_cosine_t_inst") - val(gm, "C2_passive", "harmfulness_cosine_t_inst"),
+            "harmfulness_middle_cos_C4": val(gm, "C4_passive_context", "harmfulness_cosine_t_inst"),
+            "harmfulness_middle_cos_context_gap_passive_C4_minus_C2": val(gm, "C4_passive_context", "harmfulness_cosine_t_inst") - val(gm, "C2_passive", "harmfulness_cosine_t_inst"),
             "refusal_late_cos_C1": val(gl, "C1_active", "refusal_cosine_t_post"),
-            "refusal_late_cos_C3": val(gl, "C3_active_ctx", "refusal_cosine_t_post"),
-            "refusal_late_cos_context_gap_active_C3_minus_C1": val(gl, "C3_active_ctx", "refusal_cosine_t_post") - val(gl, "C1_active", "refusal_cosine_t_post"),
+            "refusal_late_cos_C3": val(gl, "C3_active_context", "refusal_cosine_t_post"),
+            "refusal_late_cos_context_gap_active_C3_minus_C1": val(gl, "C3_active_context", "refusal_cosine_t_post") - val(gl, "C1_active", "refusal_cosine_t_post"),
             "refusal_late_cos_C2": val(gl, "C2_passive", "refusal_cosine_t_post"),
-            "refusal_late_cos_C4": val(gl, "C4_passive_ctx", "refusal_cosine_t_post"),
-            "refusal_late_cos_context_gap_passive_C4_minus_C2": val(gl, "C4_passive_ctx", "refusal_cosine_t_post") - val(gl, "C2_passive", "refusal_cosine_t_post"),
+            "refusal_late_cos_C4": val(gl, "C4_passive_context", "refusal_cosine_t_post"),
+            "refusal_late_cos_context_gap_passive_C4_minus_C2": val(gl, "C4_passive_context", "refusal_cosine_t_post") - val(gl, "C2_passive", "refusal_cosine_t_post"),
         })
 
     context_effect = pd.DataFrame(rows_ctx)
@@ -1392,17 +1392,17 @@ def write_interpretation(
     lines.append("Primary C-variant outputs:")
     lines.append("  C1_active: plain active harmful request")
     lines.append("  C2_passive: plain passive-framed harmful request")
-    lines.append("  C3_active_ctx: active request with research/domain context")
-    lines.append("  C4_passive_ctx: passive-framed request with research/domain context")
+    lines.append("  C3_active_context: active request with research/domain context")
+    lines.append("  C4_passive_context: passive-framed request with research/domain context")
     lines.append("  C5_tense: past-tense reframed harmful request")
     lines.append("")
     lines.append("Expected hypothesis pattern:")
     lines.append("  Harmfulness at t_inst, middle layers:")
     lines.append("    C1_active and C2_passive should both be aligned with harmfulness vector.")
-    lines.append("    C3_active_ctx and C4_passive_ctx may shift depending on context.")
+    lines.append("    C3_active_context and C4_passive_context may shift depending on context.")
     lines.append("  Refusal at t_post_inst, late layers:")
     lines.append("    C1_active should be more aligned with refusal vector than C2_passive.")
-    lines.append("    Compare C3_active_ctx vs C4_passive_ctx separately.")
+    lines.append("    Compare C3_active_context vs C4_passive_context separately.")
     lines.append("")
     lines.append("Variant-band summary:")
     lines.append(by_variant_band.to_string(index=False))

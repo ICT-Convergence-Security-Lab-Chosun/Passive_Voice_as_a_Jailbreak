@@ -208,8 +208,8 @@ def main():
                     "domain":         domain,
                     "C1_active":      c1,
                     "C2_passive":     c2,
-                    "C3_active_ctx":  c3,
-                    "C4_passive_ctx": c4,
+                    "C3_active_context":  c3,
+                    "C4_passive_context": c4,
                     "C5_tense":       c5,
                 }
 
@@ -243,8 +243,8 @@ def main():
         print(f"[{rec['id']}] {rec['category']}")
         print(f"  C1: {rec['C1_active']}")
         print(f"  C2: {rec['C2_passive']}")
-        print(f"  C3: {rec['C3_active_ctx']}")
-        print(f"  C4: {rec['C4_passive_ctx']}")
+        print(f"  C3: {rec['C3_active_context']}")
+        print(f"  C4: {rec['C4_passive_context']}")
         print(f"  C5: {rec['C5_tense']}")
         print()
 

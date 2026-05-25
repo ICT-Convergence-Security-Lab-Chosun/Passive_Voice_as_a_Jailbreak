@@ -4,7 +4,7 @@
 Qwen2.5-72B-Instruct all-layer representation visualization script.
 
 What this does
-- Loads C1_active / C2_passive / C3_active_ctx / C4_passive_ctx from a JSON file.
+- Loads C1_active / C2_passive / C3_active_context / C4_passive_context from a JSON file.
 - Loads benign prompts from Alpaca by default, or from a local CSV if provided.
 - Loads Sorry-Bench harmful reference prompts from a local CSV.
 - Extracts hidden states for every transformer block layer from Qwen2.5-72B-Instruct.
@@ -65,8 +65,8 @@ except Exception:
 COND_STYLE = {
     "C1_active":      {"color": "#4C72B0", "marker": "o", "label": "C1 active (JBB)"},
     "C2_passive":     {"color": "#DD8452", "marker": "s", "label": "C2 passive (JBB)"},
-    "C3_active_ctx":  {"color": "#55A868", "marker": "^", "label": "C3 active+ctx (JBB)"},
-    "C4_passive_ctx": {"color": "#C44E52", "marker": "D", "label": "C4 passive+ctx (JBB)"},
+    "C3_active_context":  {"color": "#55A868", "marker": "^", "label": "C3 active+context (JBB)"},
+    "C4_passive_context": {"color": "#C44E52", "marker": "D", "label": "C4 passive+context (JBB)"},
     "C5_tense":       {"color": "#E377C2", "marker": "v", "label": "C5 tense (JBB)"},
     "benign":         {"color": "#8172B2", "marker": "P", "label": "Benign"},
     "sorry_bench":    {"color": "#937860", "marker": "X", "label": "Sorry-Bench harmful ref"},
@@ -168,8 +168,8 @@ def load_json_prompts(
     prompts = {
         "C1_active":      [safe_text(x.get("C1_active", "")) for x in jbb],
         "C2_passive":     [safe_text(x.get("C2_passive", "")) for x in jbb],
-        "C3_active_ctx":  [safe_text(x.get("C3_active_ctx", "")) for x in jbb],
-        "C4_passive_ctx": [safe_text(x.get("C4_passive_ctx", "")) for x in jbb],
+        "C3_active_context":  [safe_text(x.get("C3_active_context", "")) for x in jbb],
+        "C4_passive_context": [safe_text(x.get("C4_passive_context", "")) for x in jbb],
         "C5_tense":       [safe_text(x.get("C5_tense", "")) for x in jbb if x.get("C5_tense")],
     }
 
@@ -742,7 +742,7 @@ def parse_args():
     parser.add_argument("--sorry_category_ids", type=str, default=None, help="Comma-separated Sorry-Bench categories to include, e.g. 6,7,8,9,10,12,13,14,15,17,18,19,20,21,23,24,28")
     parser.add_argument("--sorry_per_category", type=int, default=None, help="Randomly sample this many Sorry-Bench prompts per selected category. Use 10 for 17 categories x 10 = 170.")
     parser.add_argument("--max_jbb_per_variant", type=int, default=None, help="Randomly sample at most this many JBB prompts per C1/C2/C3/C4 variant.")
-    parser.add_argument("--skip_conditions", type=str, default=None, help="Comma-separated condition names to exclude, e.g. C5_tense or C5_tense,C6_tense_ctx")
+    parser.add_argument("--skip_conditions", type=str, default=None, help="Comma-separated condition names to exclude, e.g. C5_tense or C5_tense,C6_tense_context")
     parser.add_argument("--random_seed", type=int, default=42)
 
     parser.add_argument("--methods", type=str, default="pca", help="Comma-separated: pca,umap,tsne. For all layers, pca is strongly recommended first.")

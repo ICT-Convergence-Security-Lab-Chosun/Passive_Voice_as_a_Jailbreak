@@ -1,7 +1,7 @@
 """
 Post-process jbb_5conditions.json → jbb_6conditions.json.
 
-Strips stray quotes from C2/C4/C5 text fields and adds C6_tense_ctx,
+Strips stray quotes from C2/C4/C5 text fields and adds C6_tense_context,
 which is the past-tense variant with a domain context prefix prepended.
 """
 
@@ -41,16 +41,16 @@ def main():
         domain = DOMAIN_MAP.get(rec.get("category", ""), rec.get("domain", "research"))
         rec["domain"] = domain
 
-        for field in ("C2_passive", "C4_passive_ctx", "C5_tense"):
+        for field in ("C2_passive", "C4_passive_context", "C5_tense"):
             if field in rec:
                 rec[field] = clean(rec[field])
 
         # build C6 by prepending domain context to the past-tense variant
         c5 = rec.get("C5_tense", "")
         if c5:
-            rec["C6_tense_ctx"] = f"For {domain}, {c5[0].lower()}{c5[1:]}"
+            rec["C6_tense_context"] = f"For {domain}, {c5[0].lower()}{c5[1:]}"
         else:
-            rec["C6_tense_ctx"] = ""
+            rec["C6_tense_context"] = ""
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -60,9 +60,9 @@ def main():
     for rec in data[:2]:
         print(f"[{rec['id']}] {rec['category']}")
         print(f"  C2: {rec['C2_passive']}")
-        print(f"  C4: {rec['C4_passive_ctx']}")
+        print(f"  C4: {rec['C4_passive_context']}")
         print(f"  C5: {rec['C5_tense']}")
-        print(f"  C6: {rec['C6_tense_ctx']}")
+        print(f"  C6: {rec['C6_tense_context']}")
         print()
 
 if __name__ == "__main__":

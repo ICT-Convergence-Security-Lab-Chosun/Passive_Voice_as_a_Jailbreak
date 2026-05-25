@@ -1,6 +1,6 @@
 # Passive Voice as a Jailbreak
 
-Code and dataset for the paper: **"Passive Voice as a Jailbreak: Exploiting Mismatched Generalization in LLM Safety"** (ACL submission)
+Code and dataset for the paper: **"Passive Voice as a Jailbreak: Exploiting Mismatched Generalization in LLM Safety"** 
 
 > **Warning:** This repository includes research on LLM safety vulnerabilities. Code examples and the dataset contain harmful content included solely for scientific evaluation.
 
@@ -217,15 +217,3 @@ Before pushing, check for accidentally committed credentials:
 rg -n "api[_-]?key|secret|token|password|bearer|sk-|hf_|ghp_|github_pat" .
 ```
 
----
-
-## Citation
-
-```bibtex
-@article{passive_jailbreak_2025,
-  title   = {Passive Voice as a Jailbreak: Exploiting Mismatched Generalization in LLM Safety},
-  author  = {Anonymous},
-  journal = {ACL submission},
-  year    = {2025}
-}
-```

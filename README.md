@@ -1,9 +1,8 @@
-# Passive Voice as a Jailbreak
+# A Representation-Level Analysis of Why Simple-Transformation Jailbreaks Bypass the Safety Boundary of LLM Agents
 
-Code and dataset for the paper:
+Chanbin Moon, Changhoon Lim, Minyeong Choe, Seunghan Kim, Haehyun Cho, Hyunil Kim
 
-> **A Representation-Level Analysis of Why Simple-Transformation Jailbreaks Bypass the Safety Boundary of LLM Agents**
-> Chanbin Moon, Changhoon Lim, Minyeong Choe, Seunghan Kim, Haehyun Cho, Hyunil Kim
+Code and dataset for the paper.
 
 ![Figure 1](Figure/fig1.png)
 

@@ -5,8 +5,6 @@ Code and dataset for the paper:
 > **A Representation-Level Analysis of Why Simple-Transformation Jailbreaks Bypass the Safety Boundary of LLM Agents**
 > Chanbin Moon, Changhoon Lim, Minyeong Choe, Seunghan Kim, Haehyun Cho, Hyunil Kim
 
-> **Warning:** This repository includes research on LLM safety vulnerabilities. Code examples and the dataset contain harmful content included solely for scientific evaluation.
-
 ![Figure 1](Figure/fig1.png)
 
 ---

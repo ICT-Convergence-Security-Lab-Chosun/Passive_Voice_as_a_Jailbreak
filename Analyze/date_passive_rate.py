@@ -83,7 +83,7 @@ PASSIVE_RELS = {"nsubj:pass", "aux:pass", "csubj:pass"}
 # text_fields : ordered candidate column names for the behavior text
 #               value may be str, list[str], or list[dict] (first turn extracted)
 #
-# Verified sizes  (2025-05):
+# Verified sizes :
 #   JBB-Behaviors : 100  (harmful split of 'behaviors' config; 'Goal' is the prompt)
 #   SORRY-Bench   : 450  (9,450 total × 21 prompt_styles → filter base only)
 #   HarmBench     : 400  (GitHub CSV; not on HF public hub)
